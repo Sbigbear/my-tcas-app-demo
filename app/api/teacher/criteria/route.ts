@@ -1,102 +1,147 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { cookies } from 'next/headers'
+import jwt from 'jsonwebtoken'
 
-// บังคับไม่ให้ Next.js Cache ข้อมูล API นี้
-export const dynamic = 'force-dynamic'
-
-// GET: ดึงรายการหลักสูตรทั้งหมด
-export async function GET() {
-  try {
-    const courses = await prisma.programCriteria.findMany({
-      include: {
-        university: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
-    return NextResponse.json({ success: true, data: courses })
-  } catch (error) {
-    console.error('Error fetching courses:', error)
-    return NextResponse.json(
-      { success: false, message: 'ไม่สามารถดึงข้อมูลหลักสูตรได้' },
-      { status: 500 }
-    )
-  }
+const toNumber = (val: any) => {
+  if (val === null || val === undefined || val === '') return null
+  const parsed = Number(val)
+  return isNaN(parsed) ? null : parsed
 }
 
-// POST: เพิ่มหลักสูตรใหม่
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   try {
-    const body = await request.json()
+    const { searchParams } = new URL(request.url)
+    let universityId = searchParams.get('universityId')
 
-    let university = await prisma.university.findFirst()
-    if (!university) {
-      university = await prisma.university.create({
-        data: {
-          code: 'KU01',
-          name: 'มหาวิทยาลัยเกษตรศาสตร์',
-          campus: 'บางเขน',
-          faculty: body.faculty || 'คณะวิทยาศาสตร์',
-        },
-      })
+    if (!universityId) {
+      const cookieStore = await cookies()
+      
+      // 📌 ปรับให้เช็ค Cookie ครอบคลุมทั้ง email, user_email, userId, teacher_id
+      let userEmail = cookieStore.get('email')?.value || cookieStore.get('user_email')?.value
+      let userId = cookieStore.get('userId')?.value || cookieStore.get('teacher_id')?.value
+      const token = cookieStore.get('token')?.value
+
+      if (token) {
+        try {
+          const decoded = jwt.decode(token) as any
+          if (decoded) {
+            userEmail = userEmail || decoded?.email || decoded?.userEmail
+            userId = userId || decoded?.id || decoded?.userId || decoded?.sub
+          }
+        } catch (e) {
+          console.error('JWT Decode Error:', e)
+        }
+      }
+
+      if (userEmail || userId) {
+        const user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              userEmail ? { email: userEmail } : {},
+              userId ? { Usersid: userId } : {},
+            ],
+          },
+          select: { universityId: true },
+        })
+        universityId = user?.universityId || null
+      }
     }
 
-    const newCourse = await prisma.programCriteria.create({
-      data: {
-        programName: body.programName,
-        minGpax: parseFloat(body.minGpax) || 0.0,
-        capacity: parseInt(body.capacity) || 0,
-        isOpen: body.isOpen !== undefined ? Boolean(body.isOpen) : true,
-        
-        minMathGpa: body.minMathGpa ? parseFloat(body.minMathGpa) : null,
-        minSciGpa: body.minSciGpa ? parseFloat(body.minSciGpa) : null,
-        minEngGpa: body.minEngGpa ? parseFloat(body.minEngGpa) : null,
-        minTgat: body.minTgat ? parseFloat(body.minTgat) : null,
-        minTpat2: body.minTpat2 ? parseFloat(body.minTpat2) : null,
-        minTpat3: body.minTpat3 ? parseFloat(body.minTpat3) : null,
-        minAlevelMath1: body.minAlevelMath1 ? parseFloat(body.minAlevelMath1) : null,
-        minAlevelSci: body.minAlevelSci ? parseFloat(body.minAlevelSci) : null,
-        
-        universityId: university.id,
-      },
+    const whereCondition = universityId ? { universityId } : {}
+    const criteria = await prisma.programCriteria.findMany({
+      where: whereCondition,
+      include: { university: true },
+      orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json({ success: true, data: newCourse })
+    return NextResponse.json({ success: true, data: criteria })
   } catch (error) {
-    console.error('Error adding course:', error)
+    console.error('Error fetching criteria:', error)
     return NextResponse.json(
-      { success: false, message: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' },
+      { success: false, message: 'Failed to fetch criteria' },
       { status: 500 }
     )
   }
 }
 
-// PATCH: อัปเดตสถานะ isOpen ลง DB
-export async function PATCH(request: Request) {
+export async function POST(req: Request) {
   try {
-    const body = await request.json()
-    const { id, isOpen } = body
+    const body = await req.json()
 
-    if (!id) {
+    if (!body.universityId) {
       return NextResponse.json(
-        { success: false, message: 'ไม่พบ ID ของหลักสูตร' },
+        { success: false, message: 'ไม่พบข้อมูลมหาวิทยาลัย/สาขา (universityId)' },
         { status: 400 }
       )
     }
 
-    const updatedCourse = await prisma.programCriteria.update({
-      where: { id },
+    const newCriteria = await prisma.programCriteria.create({
       data: {
-        isOpen: Boolean(isOpen),
+        universityId: body.universityId,
+        programName: body.programName,
+        capacity: toNumber(body.capacity) ?? 0,
+        minGpax: toNumber(body.minGpax),
+        isOpen: body.isOpen ?? true,
+        minMathGpa: toNumber(body.minMathGpa),
+        minSciGpa: toNumber(body.minSciGpa),
+        minEngGpa: toNumber(body.minEngGpa),
+        minThaiGpa: toNumber(body.minThaiGpa),
+        minSocialGpa: toNumber(body.minSocialGpa),
+        minHealthGpa: toNumber(body.minHealthGpa),
+        minArtGpa: toNumber(body.minArtGpa),
+        minCareerGpa: toNumber(body.minCareerGpa),
+        minTgat: toNumber(body.minTgat),
+        minTpat1: toNumber(body.minTpat1),
+        minTpat2: toNumber(body.minTpat2),
+        minTpat3: toNumber(body.minTpat3),
+        minTpat4: toNumber(body.minTpat4),
+        minTpat5: toNumber(body.minTpat5),
+        minAlevelMath1: toNumber(body.minAlevelMath1),
+        minAlevelMath2: toNumber(body.minAlevelMath2),
+        minAlevelSci: toNumber(body.minAlevelSci),
+        minAlevelPhy: toNumber(body.minAlevelPhy),
+        minAlevelChem: toNumber(body.minAlevelChem),
+        minAlevelBio: toNumber(body.minAlevelBio),
+        minAlevelSoc: toNumber(body.minAlevelSoc),
+        minAlevelThai: toNumber(body.minAlevelThai),
+        minAlevelEng: toNumber(body.minAlevelEng),
+        minAlevelForeign: toNumber(body.minAlevelForeign),
+        foreignLanguageSubject: body.foreignLanguageSubject || null,
       },
     })
 
-    return NextResponse.json({ success: true, data: updatedCourse })
+    return NextResponse.json({ success: true, data: newCriteria })
   } catch (error) {
-    console.error('Error updating isOpen status:', error)
+    console.error('Error creating criteria:', error)
     return NextResponse.json(
-      { success: false, message: 'เกิดข้อผิดพลาดในการบันทึกสถานะ' },
+      { success: false, message: 'Failed to create criteria' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const { id, isOpen } = await req.json()
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: 'Missing criteria ID' },
+        { status: 400 }
+      )
+    }
+
+    const updated = await prisma.programCriteria.update({
+      where: { Program_Criteriaid: id },
+      data: { isOpen },
+    })
+
+    return NextResponse.json({ success: true, data: updated })
+  } catch (error) {
+    console.error('Error updating status:', error)
+    return NextResponse.json(
+      { success: false, message: 'Failed to update status' },
       { status: 500 }
     )
   }
