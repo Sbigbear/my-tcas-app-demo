@@ -1,5 +1,6 @@
 import prisma from '@/lib/prisma'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import SampleApplyClient from './SampleApplyClient'
 
 export default async function StudentSampleApplyPage() {
@@ -23,10 +24,9 @@ export default async function StudentSampleApplyPage() {
     })
   }
 
+  // ไม่พบนักเรียนที่ล็อกอิน -> กลับหน้า login (ห้ามดึงนักเรียนคนอื่นมาแทน)
   if (!currentStudent) {
-    currentStudent = await prisma.student.findFirst({
-      orderBy: { createdAt: 'asc' },
-    })
+    redirect('/login')
   }
 
   // ดึงหลักสูตรทั้งหมด พร้อมประวัติการสมัครเพื่อคำนวณจำนวนรวม

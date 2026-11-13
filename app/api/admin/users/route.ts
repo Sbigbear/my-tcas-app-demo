@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import bcrypt from 'bcryptjs'
 
 // GET: ดึงจำนวนผู้ใช้งาน
 export async function GET() {
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
         Usersid: customUserId,
         name,
         email,
-        password,
+        password: await bcrypt.hash(password, 10),
         role: userRole,
         teacherId: userRole === 'OFFICER' ? teacherId || null : null,
         universityId: userRole === 'OFFICER' ? universityId || null : null,

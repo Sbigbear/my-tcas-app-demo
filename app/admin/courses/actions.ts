@@ -9,15 +9,17 @@ export async function deleteCourseAction(id: string) {
       return { success: false, message: 'กรุณาระบุ ID หลักสูตร' }
     }
 
+    // 📌 1. เคลียร์การสมัครของนักเรียน (ใช้ Program_Criteriaid ให้ตรงกับ Schema)
     await prisma.application.deleteMany({
-      where: { Program_Criteriaid: id } as any,
+      where: { criteriaId: id },
     })
 
-    // ลบเกณฑ์หลักสูตร
+    // 📌 2. ลบเกณฑ์หลักสูตร
     await prisma.programCriteria.deleteMany({
       where: { Program_Criteriaid: id },
     })
 
+    // 📌 3. Revalidate เคลียร์ Cache ทุกหน้าที่เกี่ยวข้อง
     revalidatePath('/admin/courses')
     revalidatePath('/officer/courses')
     revalidatePath('/teacher/courses')
