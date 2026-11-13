@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic'
 
 export default async function CoursesPage() {
   try {
-    // 📌 ดึงหลักสูตรทั้งหมดทุกคณะทุกสาขาวิชาโดยไม่มี Filter กรอง
     const courses = await prisma.programCriteria.findMany({
       include: { university: true },
       orderBy: { createdAt: 'desc' },

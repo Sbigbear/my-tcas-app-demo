@@ -14,23 +14,18 @@ export async function DELETE(request: Request) {
       )
     }
 
-    // 📌 Step 1: ลบรายการสมัครของนักเรียนที่ผูกกับหลักสูตรนี้ก่อน 
-    // (ใช้ criteriaId ให้ตรงตาม schema.prisma เอา `as any` ออกได้เลย)
     await prisma.application.deleteMany({
       where: {
         criteriaId: id,
       },
     })
 
-    // 📌 Step 2: ลบข้อมูลหลักสูตรออกจากตาราง ProgramCriteria
-    // (ใช้ Program_Criteriaid ตาม Primary Key ของตารางหลักสูตร)
     await prisma.programCriteria.deleteMany({
       where: {
         Program_Criteriaid: id,
       },
     })
 
-    // 📌 Step 3: Revalidate เคลียร์ Cache ให้ข้อมูลทุกหน้าอัปเดตเรียลไทม์ทันที
     revalidatePath('/admin/courses')
     revalidatePath('/officer/courses')
     revalidatePath('/teacher/courses')

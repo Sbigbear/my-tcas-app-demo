@@ -25,7 +25,7 @@ export default function CourseClient({ initialCourses }: CourseClientProps) {
   const [selectedCourse, setSelectedCourse] = useState<CourseItem | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // 📌 ค้นหา Dynamic ครอบคลุม รหัส, ชื่อหลักสูตร, คณะ, สาขา, และวิทยาเขต
+  // ค้นหา Dynamic ครอบคลุม รหัส, ชื่อหลักสูตร, คณะ, สาขา, และวิทยาเขต
   const filteredCourses = courses.filter((c) => {
     const term = search.toLowerCase()
     return (

@@ -6,7 +6,7 @@ import { cookies } from 'next/headers'
 function evaluateEligibility(student: any, criteria: any) {
   const failedReasons: string[] = []
 
-  // 1. ตรวจสอบเกรดเฉลี่ย (GPA)
+  // ตรวจสอบเกรดเฉลี่ย (GPA)
   const gpaChecks = [
     { field: 'gpax', minField: 'minGpax', name: 'GPAX' },
     { field: 'mathGpa', minField: 'minMathGpa', name: 'GPA คณิต', altField: 'gpaMath' },
@@ -38,7 +38,7 @@ function evaluateEligibility(student: any, criteria: any) {
     }
   }
 
-  // 2. ตรวจสอบคะแนนสอบ (TGAT / TPAT / A-Level)
+  // ตรวจสอบคะแนนสอบ (TGAT / TPAT / A-Level)
   const scores = student.tcasScores || {}
   const tcasChecks = [
     { field: 'tgat', minField: 'minTgat', name: 'TGAT' },
@@ -78,7 +78,7 @@ function evaluateEligibility(student: any, criteria: any) {
     }
   }
 
-  // หากมีวิชาที่ไม่ผ่านเกณฑ์
+  // ไม่ผ่านเกณฑ์
   if (failedReasons.length > 0) {
     return {
       status: 'INELIGIBLE' as const,
@@ -86,14 +86,14 @@ function evaluateEligibility(student: any, criteria: any) {
     }
   }
 
-  // หากผ่านเกณฑ์ครบทุกข้อ
+  // หากผ่านเกณฑ์ครบ
   return {
     status: 'ELIGIBLE' as const,
     remark: 'ผ่านเกณฑ์คุณสมบัติขั้นต่ำทั้งหมด',
   }
 }
 
-// 1. ฟังก์ชัน GET (ดึงรายการสมัคร + คำนวณและสั่ง UPDATE ซิงก์ลง MySQL ทันที)
+// ดึงรายการสมัคร + คำนวณและสั่ง UPDATE ซิงก์ลง MySQL ทันที
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -122,7 +122,6 @@ export async function GET(request: Request) {
       })
     }
 
-    // ดึงข้อมูลการสมัคร พร้อม student (และคะแนน) + criteria (และมหาวิทยาลัย)
     const applications = await prisma.application.findMany({
       where: {
         studentId: student.Studentsid,
@@ -144,7 +143,7 @@ export async function GET(request: Request) {
       },
     })
 
-    // 📌 ประมวลผลและซิงก์ค่า status / remark ลง MySQL หากข้อมูลเดิมใน DB ไม่ถูกต้อง
+    // ประมวลผลและซิงก์ค่า status / remark ลง MySQL หากข้อมูลเดิมใน DB ไม่ถูกต้อง
     const updatedApplications = await Promise.all(
       applications.map(async (app: any) => {
         if (app.status !== 'CANCELLED') {
@@ -183,7 +182,7 @@ export async function GET(request: Request) {
   }
 }
 
-// 2. ฟังก์ชัน POST (บันทึกการสมัคร + คำนวณผลการตรวจผ่าน/ไม่ผ่าน อัตโนมัติลง DB ทันที)
+//  POST (บันทึกการสมัคร + คำนวณผลการตรวจผ่าน/ไม่ผ่าน อัตโนมัติลง DB ทันที)
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -204,7 +203,7 @@ export async function POST(req: Request) {
 
     const targetStudentId = bodyStudentId || cookieStudentId
 
-    // 📌 ดึงข้อมูลนักเรียนพร้อมคะแนน TCAS
+    //  ดึงข้อมูลนักเรียนพร้อมคะแนน TCAS
     let student = null
     if (targetStudentId) {
       student = await prisma.student.findFirst({
@@ -219,7 +218,6 @@ export async function POST(req: Request) {
       })
     }
 
-    // ❌ [แก้ข้อ 3.1] ถอด Fallback ที่ดึงนักเรียนคนแรกใน DB ออก ป้องกันการสมัครผิดคน
     if (!student) {
       return NextResponse.json(
         { success: false, message: 'ไม่พบข้อมูลนักเรียนที่ระบุในระบบ กรุณาเข้าสู่ระบบอีกครั้ง' },
@@ -227,7 +225,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 [แก้ข้อ 3.2] ดึงเกณฑ์ของหลักสูตร พร้อมนับจำนวนผู้สมัครปัจจุบัน (_count)
     const criteria = await prisma.programCriteria.findUnique({
       where: { Program_Criteriaid: criteriaId },
       include: {
@@ -244,7 +241,7 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 เช็กว่าหลักสูตรปิดรับสมัครอยู่หรือไม่
+    // เช็กว่าหลักสูตร
     if (criteria.isOpen === false) {
       return NextResponse.json(
         { success: false, message: 'หลักสูตรนี้ปิดรับสมัครแล้ว' },
@@ -252,7 +249,7 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 เช็กว่าผู้สมัครเต็มโควตา (capacity) หรือยัง
+    // เช็กว่าผู้สมัครเต็มโควตา 
     if (criteria.capacity && criteria._count.applications >= criteria.capacity) {
       return NextResponse.json(
         { success: false, message: 'หลักสูตรนี้มีผู้สมัครเต็มจำนวนโควตาแล้ว' },
@@ -298,7 +295,7 @@ export async function POST(req: Request) {
     const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0
     const newAppId = `app-${String(maxNum + 1).padStart(3, '0')}`
 
-    // 📌 ประมวลผลคุณสมบัติจริงเปรียบเทียบเกรด/คะแนน กับ เกณฑ์ทันที
+    //  ประมวลผลคุณสมบัติจริงเปรียบเทียบเกรด/คะแนน กับ เกณฑ์ทันที
     const evaluation = evaluateEligibility(student, criteria)
 
     // บันทึกการสมัครลงฐานข้อมูลพร้อมสถานะ ELIGIBLE / INELIGIBLE และเหตุผล

@@ -24,12 +24,12 @@ function resolveLogType(log: LogEntry): 'auth' | 'user' | 'course' | 'passed_stu
   const action = (log.action || '').toUpperCase()
   const details = (log.details || '').toUpperCase()
 
-  // 1. หมวด "พิมพ์/ส่งออกรายงาน PDF"
+  // พิมพ์/ส่งออกรายงาน PDF
   if (action.includes('REPORT') || action.includes('EXPORT') || details.includes('รายงาน') || details.includes('PDF')) {
     return 'report'
   }
 
-  // 2. หมวด "นักเรียนผ่านคัดเลือก / ยืนยันผล"
+  // นักเรียนผ่านคัดเลือก / ยืนยันผล
   if (
     action.includes('CONFIRM') ||
     action.includes('PASS') ||
@@ -40,17 +40,17 @@ function resolveLogType(log: LogEntry): 'auth' | 'user' | 'course' | 'passed_stu
     return 'passed_students'
   }
 
-  // 3. หมวด "หลักสูตร / เกณฑ์"
+  // หลักสูตร / เกณฑ์
   if (action.includes('COURSE') || action.includes('CRITERIA') || action.includes('PROGRAM')) {
     return 'course'
   }
 
-  // 4. หมวด "ผู้ใช้งาน / จัดการสิทธิ์"
+  // ผู้ใช้งาน / จัดการสิทธิ์
   if (action.includes('USER') || action.includes('TEACHER') || action.includes('OFFICER')) {
     return 'user'
   }
 
-  // 5. หมวด "เข้าสู่ระบบ"
+  // เข้าสู่ระบบ
   if (action.includes('LOGIN') || action.includes('LOGOUT') || action.includes('AUTH')) {
     return 'auth'
   }
@@ -64,17 +64,14 @@ export default function LogsClient({ initialLogs }: LogsClientProps) {
   const [filterRole, setFilterRole] = useState<string>('all')
 
   const filteredLogs = (initialLogs || []).filter((log) => {
-    // 1. ค้นหาคำ
     const matchesSearch =
       log.action.toLowerCase().includes(search.toLowerCase()) ||
       log.user.toLowerCase().includes(search.toLowerCase()) ||
       log.details.toLowerCase().includes(search.toLowerCase())
 
-    // 2. กรองตามประเภทกิจกรรม
     const resolvedType = resolveLogType(log)
     const matchesType = filterType === 'all' || resolvedType === filterType
 
-    // 3. กรองตามบทบาทผู้ใช้งาน
     const matchesRole =
       filterRole === 'all' || log.role.toUpperCase() === filterRole.toUpperCase()
 
