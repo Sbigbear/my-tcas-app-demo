@@ -38,21 +38,6 @@ export async function POST(req: Request) {
       isPasswordValid = false
     }
 
-    // 🔄 2. Fallback: กรณีรหัสใน DB ยังเป็น Plaintext
-    if (!isPasswordValid && user.password === password) {
-      isPasswordValid = true
-
-      try {
-        const hashedPassword = await bcrypt.hash(password, 10)
-        await prisma.user.update({
-          where: { Usersid: user.Usersid },
-          data: { password: hashedPassword },
-        })
-      } catch (updateErr) {
-        console.error('Auto-hash password error:', updateErr)
-      }
-    }
-
     if (!isPasswordValid) {
       return NextResponse.json(
         { success: false, message: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือไม่มีสิทธิ์เจ้าหน้าที่คณะ' },

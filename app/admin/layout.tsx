@@ -9,8 +9,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const adminId = cookieStore.get('admin_id')?.value || cookieStore.get('userId')?.value
   const userRole = cookieStore.get('role')?.value
 
-  // เช็กสิทธิ์ ADMIN หรือ OFFICER
-  if (!adminId || (userRole !== 'ADMIN' && userRole !== 'OFFICER')) {
+  // เช็กสิทธิ์ ADMIN เท่านั้น
+  if (!adminId || userRole !== 'ADMIN') {
     redirect('/login')
   }
 

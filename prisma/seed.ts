@@ -26,7 +26,7 @@ async function main() {
     create: {
       Usersid: 'usr-admin-01',
       email: 'admin@ku.ac.th',
-      password: 'password123', // ควร HASH รหัสผ่านในการใช้งานจริง
+      password: 'password123', 
       name: 'ผู้ดูแลระบบสารสนเทศ',
       role: Role.ADMIN,
       universityId: university.Universitiesid,
