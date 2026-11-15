@@ -21,7 +21,7 @@ async function main() {
 
   // 2. สร้างผู้ดูแลระบบ (Admin) ตัวอย่าง
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@tcas.ac.th' },
+    where: { email: 'admin@ku.ac.th' },
     update: {},
     create: {
       Usersid: 'usr-admin-01',
