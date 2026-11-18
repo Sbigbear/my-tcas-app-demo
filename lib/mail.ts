@@ -1,7 +1,4 @@
-// ส่งอีเมลจริงผ่าน SMTP (เช่น Gmail) — ตั้งค่าใน .env
-//   SMTP_USER   = อีเมล Gmail ที่ใช้ส่ง
-//   SMTP_PASS   = App Password 16 หลักของ Gmail (ไม่ใช่รหัสผ่านปกติ)
-// ถ้ายังไม่ได้ตั้งค่า ระบบจะพิมพ์อีเมลออกทาง terminal แทน (ไม่ส่งจริง)
+
 import nodemailer from 'nodemailer'
 
 export const isMailConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS)
@@ -14,14 +11,18 @@ function getTransporter() {
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port,
       secure: port === 465,
-      // Gmail แสดง App Password แบบเว้นวรรค (abcd efgh ...) -> ตัดช่องว่างออกให้อัตโนมัติ
       auth: { user: process.env.SMTP_USER?.trim(), pass: process.env.SMTP_PASS?.replace(/\s+/g, '') },
     })
   }
   return transporter
 }
 
-export async function sendMail(to: string, subject: string, html: string): Promise<{ sent: boolean; error?: string }> {
+export async function sendMail(
+  to: string,
+  subject: string,
+  html: string,
+  opts: { replyTo?: string } = {}
+): Promise<{ sent: boolean; error?: string }> {
   if (!isMailConfigured()) {
     console.log(`\n[mail:not-configured] ถึง ${to}\nหัวข้อ: ${subject}\n${html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')}\n`)
     return { sent: false, error: 'ยังไม่ได้ตั้งค่า SMTP_USER / SMTP_PASS ใน .env' }
@@ -32,6 +33,7 @@ export async function sendMail(to: string, subject: string, html: string): Promi
       to,
       subject,
       html,
+      ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
     })
     return { sent: true }
   } catch (err: any) {
@@ -44,7 +46,7 @@ export const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL || 'http://localhos
 
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
-// เทมเพลตอีเมลแบบเรียบ ๆ ใช้ร่วมกันทุกฉบับ
+
 export function emailTemplate(opts: { greetingName: string; paragraphs: string[]; button?: { label: string; url: string }; footnote?: string }) {
   const { greetingName, paragraphs, button, footnote } = opts
   return `

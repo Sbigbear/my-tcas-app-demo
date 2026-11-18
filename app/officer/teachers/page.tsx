@@ -1,55 +1,10 @@
 import prisma from '@/lib/prisma'
-import { cookies } from 'next/headers'
-import jwt from 'jsonwebtoken'
+import { getLoggedInOfficer } from '@/lib/officerAuth'
 import { redirect } from 'next/navigation'
 import TeacherClient from './TeacherClient'
 
-async function getOfficerInfo() {
-  try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('token')?.value
-
-    let userEmail: string | undefined
-    let userId: string | undefined
-
-    if (token) {
-      try {
-        const decoded = jwt.decode(token) as any
-        userEmail = decoded?.email || decoded?.userEmail
-        userId = decoded?.id || decoded?.userId || decoded?.sub
-      } catch (e) {
-        console.error('JWT Decode Error:', e)
-      }
-    }
-
-    if (!userEmail) {
-      userEmail = cookieStore.get('user_email')?.value || cookieStore.get('email')?.value
-    }
-
-    const cookieUserId =
-      cookieStore.get('officer_id')?.value ||
-      cookieStore.get('userId')?.value ||
-      cookieStore.get('user_id')?.value
-
-    const orConditions = [
-      userEmail ? { email: userEmail } : null,
-      userId ? { Usersid: userId } : null,
-      cookieUserId ? { Usersid: cookieUserId } : null,
-    ].filter(Boolean) as any[]
-
-    if (orConditions.length === 0) return null
-
-    const user = await prisma.user.findFirst({
-      where: { OR: orConditions },
-      include: { university: true },
-    })
-
-    return user
-  } catch (err) {
-    console.error('Error fetching officer:', err)
-    return null
-  }
-}
+// ใช้ helper กลาง (เลือกผู้ใช้ที่ล็อกอินล่าสุด ไม่สับสนกับ cookie ค้างของบทบาทอื่น)
+const getOfficerInfo = getLoggedInOfficer
 
 export default async function OfficerTeachersPage() {
   const officer = await getOfficerInfo()

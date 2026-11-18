@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { clearSessionCookies } from '@/lib/sessionCookies'
 import prisma from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
@@ -91,6 +92,8 @@ export async function POST(req: Request) {
       maxAge: 60 * 60 * 24, // 1 วัน
     }
 
+    // ล้าง cookie ของบทบาทอื่นที่อาจค้างอยู่ ก่อนตั้งของการล็อกอินครั้งนี้
+    clearSessionCookies(response)
     response.cookies.set('admin_id', user.Usersid, cookieOptions)
     response.cookies.set('userId', user.Usersid, cookieOptions)
     response.cookies.set('email', user.email ?? '', cookieOptions)

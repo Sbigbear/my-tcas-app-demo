@@ -23,9 +23,15 @@ export default function AdminSidebar() {
     }
   }, [])
 
-  const handleLogout = () => {
-    localStorage.removeItem('user')
+  const handleLogout = async () => {
+    // ล้าง cookie ฝั่งเซิร์ฟเวอร์ (ทุกบทบาท) แล้วล้างข้อมูลในเบราว์เซอร์
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('user')
+      localStorage.removeItem('studentId')
+    }
     router.push('/login')
+    router.refresh()
   }
 
   const navItems = [

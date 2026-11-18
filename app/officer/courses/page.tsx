@@ -1,51 +1,8 @@
 import prisma from '@/lib/prisma'
-import { cookies } from 'next/headers'
-import jwt from 'jsonwebtoken'
-import AddCourseModal from './AddCourseModal'
-
-async function getLoggedInOfficer() {
-  try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('token')?.value
-
-    let userEmail: string | undefined
-    let userId: string | undefined
-
-    if (token) {
-      try {
-        const decoded = jwt.decode(token) as any
-        userEmail = decoded?.email || decoded?.userEmail
-        userId = decoded?.id || decoded?.userId || decoded?.sub
-      } catch (e) {}
-    }
-
-    if (!userEmail) {
-      userEmail = cookieStore.get('user_email')?.value || cookieStore.get('email')?.value
-    }
-
-    const cookieUserId =
-      cookieStore.get('officer_id')?.value ||
-      cookieStore.get('userId')?.value ||
-      cookieStore.get('user_id')?.value
-
-    const orConditions = [
-      userEmail ? { email: userEmail } : null,
-      userId ? { Usersid: userId } : null,
-      cookieUserId ? { Usersid: cookieUserId } : null,
-    ].filter(Boolean) as any[]
-
-    if (orConditions.length === 0) return null
-
-    const user = await prisma.user.findFirst({
-      where: { OR: orConditions },
-      include: { university: true },
-    })
-
-    return user
-  } catch (e) {
-    return null
-  }
-}
+import { getLoggedInOfficer } from '@/lib/officerAuth'
+import { CRITERIA_KEYS } from '@/lib/courseCriteria'
+import CourseFormModal, { type CourseSnapshot } from './CourseFormModal'
+import DeleteCourseButton from './DeleteCourseButton'
 
 export default async function OfficerCoursesPage() {
   const officer = await getLoggedInOfficer()
@@ -66,20 +23,24 @@ export default async function OfficerCoursesPage() {
       })
     : []
 
-  const allUnivs = await prisma.university.findMany({
-    select: {
-      Universitiesid: true,
-      faculty: true,
-      department: true,
-      campus: true,
-    },
-  })
+  // สาขาในคณะของเจ้าหน้าที่ (ไม่รวมแถว "ประจำคณะ" ของบัญชีเจ้าหน้าที่เอง)
+  const deptRows = facultyName
+    ? await prisma.university.findMany({ where: { faculty: facultyName }, select: { department: true } })
+    : []
+  const departments = [...new Set(deptRows.map((d) => d.department).filter((d) => d && d !== 'ประจำคณะ'))].sort()
 
-  const departmentOptions = allUnivs.map((u) => ({
-    universityId: u.Universitiesid,
-    facultyName: u.faculty,
-    departmentName: u.department,
-    campusName: u.campus,
+  // ข้อมูลหลักสูตรสำหรับฟอร์ม (แก้ไข / คัดลอก)
+  const snapshots: CourseSnapshot[] = courses.map((c) => ({
+    id: c.Program_Criteriaid,
+    programName: c.programName,
+    capacity: c.capacity,
+    isOpen: c.isOpen,
+    additionals: c.additionals,
+    foreignLanguageSubject: c.foreignLanguageSubject,
+    department: c.university.department,
+    criteria: Object.fromEntries(CRITERIA_KEYS.map((k) => [k, (c as any)[k] ?? null])),
+    totalApplicants: c.applications.length,
+    passedApplicants: c.applications.filter((a) => a.status === 'PASSED' || a.status === 'CONFIRMED').length,
   }))
 
   return (
@@ -96,18 +57,15 @@ export default async function OfficerCoursesPage() {
           </p>
         </div>
 
-        {/* 📌 ส่ง officerUserId เพิ่มเติมตรงนี้ */}
-        <AddCourseModal
-          facultyName={facultyName}
-          departments={departmentOptions}
-          officerUserId={officer?.Usersid}
-        />
+        {facultyName && (
+          <CourseFormModal mode="create" facultyName={facultyName} departments={departments} existingCourses={snapshots} />
+        )}
       </div>
 
       <div className="space-y-4">
         {!facultyName ? (
           <div className="p-12 text-center bg-white rounded-2xl border border-amber-200 bg-amber-50/30 text-amber-800 text-xs">
-            บัญชีผู้ใช้นี้ยังไม่ได้ผูกกับคณะสังกัด กรุณากดปุ่ม <span className="font-bold">"+ เพิ่มหลักสูตรใหม่"</span> เพื่อระบุคณะและสาขาแรกของระบบ
+            บัญชีผู้ใช้นี้ยังไม่ได้ผูกกับคณะสังกัด กรุณาให้ผู้ดูแลระบบกำหนดคณะให้บัญชีนี้ก่อน
           </div>
         ) : courses.length === 0 ? (
           <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 text-slate-400 text-xs">
@@ -168,7 +126,11 @@ export default async function OfficerCoursesPage() {
                         {course.Program_Criteriaid}
                       </span>
                       <h2 className="text-base font-bold text-slate-900">{course.programName}</h2>
-                      {course.isOpen ? (
+                      {passedApps >= course.capacity ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                          เต็มแล้ว
+                        </span>
+                      ) : course.isOpen ? (
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                           เปิดรับสมัคร
                         </span>
@@ -190,6 +152,20 @@ export default async function OfficerCoursesPage() {
                       {passedApps} / {course.capacity}{' '}
                       <span className="text-xs text-slate-500 font-normal">(สมัครรวม {totalApps} คน)</span>
                     </p>
+                    <div className="flex justify-end gap-2 mt-2">
+                      <CourseFormModal
+                        mode="edit"
+                        facultyName={facultyName}
+                        departments={departments}
+                        existingCourses={snapshots}
+                        initial={snapshots.find((x) => x.id === course.Program_Criteriaid)}
+                      />
+                      <DeleteCourseButton
+                        courseId={course.Program_Criteriaid}
+                        programName={course.programName}
+                        applicants={totalApps}
+                      />
+                    </div>
                   </div>
                 </div>
 

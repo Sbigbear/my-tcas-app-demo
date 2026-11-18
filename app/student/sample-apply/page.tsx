@@ -55,44 +55,9 @@ export default async function StudentSampleApplyPage() {
 
       const capacity = c.capacity || c.recruitAmount || 0
       const isFull = capacity > 0 && passedCount >= capacity
-      let currentIsOpen = c.isOpen ?? true
-
-      // ซิงก์สถานะ isOpen อัตโนมัติ
-      if (criteriaId) {
-        if (isFull && c.isOpen) {
-          try {
-            await prisma.programCriteria.update({
-              where: { Program_Criteriaid: criteriaId },
-              data: { isOpen: false },
-            })
-            currentIsOpen = false
-          } catch (e) {
-            try {
-              await (prisma.programCriteria as any).update({
-                where: { ProgramCriteriaid: criteriaId },
-                data: { isOpen: false },
-              })
-              currentIsOpen = false
-            } catch (err) {}
-          }
-        } else if (!isFull && !c.isOpen && capacity > 0) {
-          try {
-            await prisma.programCriteria.update({
-              where: { Program_Criteriaid: criteriaId },
-              data: { isOpen: true },
-            })
-            currentIsOpen = true
-          } catch (e) {
-            try {
-              await (prisma.programCriteria as any).update({
-                where: { ProgramCriteriaid: criteriaId },
-                data: { isOpen: true },
-              })
-              currentIsOpen = true
-            } catch (err) {}
-          }
-        }
-      }
+      // เปิด/ปิดรับสมัคร = ตามที่เจ้าหน้าที่ตั้งไว้ (isOpen) และต้องยังไม่เต็ม
+      // (ไม่เขียน isOpen กลับลงฐานข้อมูลจากหน้านี้ เพื่อไม่ให้ทับการปิดรับสมัครของเจ้าหน้าที่)
+      const currentIsOpen = (c.isOpen ?? true) && !isFull
 
       const hasApplied = currentStudent
         ? activeApplications.some((app: any) => app.studentId === currentStudent.Studentsid)

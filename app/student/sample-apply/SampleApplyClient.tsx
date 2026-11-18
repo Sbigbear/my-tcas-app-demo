@@ -174,7 +174,7 @@ export default function SampleApplyClient({
                     disabled
                     className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-600 border border-rose-200 cursor-not-allowed flex items-center gap-1.5"
                   >
-                    <XCircle className="w-4 h-4 text-rose-500" /> ปิดรับสมัคร (เต็มแล้ว)
+                    <XCircle className="w-4 h-4 text-rose-500" /> ปิดรับสมัคร
                   </button>
                 ) : !course.isOpen ? (
                   <button

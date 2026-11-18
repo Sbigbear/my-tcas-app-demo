@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createTeacherData, deleteTeacherData, sendTeacherResetLink } from './actions'
 import { UserPlus, Search, Trash2, Building, KeyRound } from 'lucide-react'
+import EditTeacherModal from './EditTeacherModal'
 
 type Notice = { type: 'success' | 'warning' | 'error'; text: string }
 const NOTICE_STYLE = {
@@ -132,6 +133,19 @@ export default function TeacherClient({
                     </span>
                   </td>
                   <td className="p-4 text-center whitespace-nowrap">
+                    <EditTeacherModal
+                      teacher={teacher}
+                      facultyName={facultyName}
+                      departments={existingDepartments}
+                      onSaved={(message, emailChanged) =>
+                        setNotice({
+                          type: 'success',
+                          text: emailChanged
+                            ? `${message} — อีเมลเข้าสู่ระบบเปลี่ยนแล้ว แจ้งอาจารย์ให้ใช้อีเมลใหม่ หรือกดปุ่มกุญแจเพื่อส่งลิงก์ตั้งรหัสผ่านไปที่อีเมลใหม่`
+                            : message,
+                        })
+                      }
+                    />
                     <button
                       onClick={() => handleSendReset(teacher)}
                       disabled={sendingId === teacher.id}

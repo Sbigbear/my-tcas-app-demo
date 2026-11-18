@@ -1,0 +1,9 @@
+import { NextResponse } from 'next/server'
+import { clearSessionCookies } from '@/lib/sessionCookies'
+
+// POST: ออกจากระบบ — ล้าง cookie ของทุกบทบาท
+export async function POST() {
+  const res = NextResponse.json({ success: true })
+  clearSessionCookies(res)
+  return res
+}

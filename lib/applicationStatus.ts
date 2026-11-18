@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { ApplicationStatus } from '@prisma/client'
 import prisma from '@/lib/prisma'
+import { notifySelectionComplete } from '@/lib/notifyOfficers'
 
 // สถานะที่อาจารย์เปลี่ยนได้ (CONFIRMED เป็นของเจ้าหน้าที่คณะ, CANCELLED ไม่ใช่หน้าที่อาจารย์)
 const TEACHER_STATUSES: Record<string, ApplicationStatus> = {
@@ -44,7 +45,7 @@ export async function setApplicationStatusAsTeacher(
   // 3. ใบสมัครต้องอยู่ในหลักสูตรของสังกัดอาจารย์ (ขอบเขตเดียวกับหน้ารายชื่อผู้สมัคร)
   const app = await prisma.application.findUnique({
     where: { Applicationsid: applicationId },
-    include: { criteria: true },
+    include: { criteria: { include: { university: true } } },
   })
   if (!app) return { success: false, message: 'ไม่พบใบสมัครนี้', httpStatus: 404 }
   if (!teacher.universityId || app.criteria.universityId !== teacher.universityId) {
@@ -69,16 +70,40 @@ export async function setApplicationStatusAsTeacher(
     }
   }
 
-  // 5. บันทึก + ซิงก์สถานะเปิด/ปิดรับสมัครตามจำนวนที่คัดเลือกแล้ว
+  // 5. บันทึกสถานะ
+  //    (ไม่แตะ isOpen: เปิด/ปิดรับสมัครเป็นการตัดสินใจของเจ้าหน้าที่ ส่วน "เต็ม" คำนวณจากจำนวนที่คัดเลือก
+  //     ทุกหน้าที่รับสมัครเช็กทั้งสองอย่างอยู่แล้ว)
   await prisma.application.update({
     where: { Applicationsid: applicationId },
     data: { status, evaluatedAt: new Date(), ...(remark !== undefined ? { remark: remark || null } : {}) },
   })
   const passedNow = await countPassed()
-  await prisma.programCriteria.update({
-    where: { Program_Criteriaid: app.criteriaId },
-    data: { isOpen: passedNow < app.criteria.capacity },
-  })
+
+  // 6. เพิ่งคัดเลือกครบจำนวนรับ -> แจ้งเจ้าหน้าที่คณะทางอีเมล
+  //    ส่งครั้งเดียวต่อหลักสูตรต่อจำนวนรับ: ถ้าอาจารย์ยกเลิกผลแล้วเลือกใหม่ ไม่ส่งซ้ำ
+  //    ส่งอีเมลไม่สำเร็จไม่ทำให้การคัดเลือกล้มเหลว
+  const notifyKey = `[${app.criteriaId}] ครบ ${app.criteria.capacity}/${app.criteria.capacity}`
+  const alreadyNotified =
+    status === ApplicationStatus.PASSED && passedNow === app.criteria.capacity
+      ? await prisma.auditLog.findFirst({
+          where: { action: 'NOTIFY_SELECTION_COMPLETE', details: { contains: notifyKey } },
+          select: { AuditLogsid: true },
+        })
+      : null
+  if (status === ApplicationStatus.PASSED && passedNow === app.criteria.capacity && !alreadyNotified) {
+    try {
+      const r = await notifySelectionComplete(app.criteria, teacher.name)
+      await prisma.auditLog.create({
+        data: {
+          action: 'NOTIFY_SELECTION_COMPLETE',
+          details: `แจ้งเจ้าหน้าที่คณะ${app.criteria.university.faculty}: ${app.criteria.programName} ${notifyKey} — ส่งอีเมล ${r.sent}/${r.total}${'error' in r && r.error ? ` (${r.error})` : ''}`,
+          userId: teacher.Usersid,
+        },
+      })
+    } catch (e) {
+      console.error('Notify selection complete error:', e)
+    }
+  }
 
   await prisma.auditLog.create({
     data: {

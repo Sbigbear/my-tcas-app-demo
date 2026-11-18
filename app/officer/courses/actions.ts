@@ -2,151 +2,217 @@
 
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { getLoggedInOfficer } from '@/lib/officerAuth'
+import { CRITERIA, CRITERIA_KEYS, criteriaProblem, criterionLabel } from '@/lib/courseCriteria'
 
-const GPA_KEYS = [
-  'minGpax', 'minMathGpa', 'minSciGpa', 'minEngGpa', 'minThaiGpa',
-  'minSocialGpa', 'minHealthGpa', 'minArtGpa', 'minCareerGpa',
-]
-const SCORE_KEYS = [
-  'minTgat', 'minTpat1', 'minTpat2', 'minTpat3', 'minTpat4', 'minTpat5',
-  'minAlevelMath1', 'minAlevelMath2', 'minAlevelSci', 'minAlevelPhy', 'minAlevelChem',
-  'minAlevelBio', 'minAlevelSoc', 'minAlevelThai', 'minAlevelEng', 'minAlevelForeign',
-]
+export type CoursePayload = {
+  departmentName: string
+  Program_Criteriaid: string
+  programName: string
+  capacity: number
+  isOpen: boolean
+  additionals: string | null
+  foreignLanguageSubject: string | null
+} & Record<string, unknown>
 
-function validateCriteria(payload: any): string | null {
-  if (!String(payload.programName ?? '').trim()) return 'กรุณาเลือกประเภทหลักสูตร / โครงการ'
-  const capacity = Number(payload.capacity)
-  if (!Number.isInteger(capacity) || capacity <= 0) return 'จำนวนที่รับสมัครต้องเป็นจำนวนเต็มมากกว่า 0'
-
-  const check = (keys: string[], max: number) => {
-    for (const k of keys) {
-      const v = payload[k]
-      if (v === null || v === undefined || v === '') continue
-      const n = Number(v)
-      if (!Number.isFinite(n) || n < 0 || n > max) return `ค่าเกณฑ์ ${k} = ${v} ไม่ถูกต้อง (ต้องอยู่ระหว่าง 0–${max})`
-    }
-    return null
-  }
-  return check(GPA_KEYS, 4) ?? check(SCORE_KEYS, 100)
+function refresh() {
+  revalidatePath('/officer/courses')
+  revalidatePath('/teacher/courses')
+  revalidatePath('/student/search')
+  revalidatePath('/student/sample-apply')
+  revalidatePath('/admin/courses')
+  revalidatePath('/admin/logs')
 }
 
-export async function createCourseAction(payload: any, userId: string) {
+function basicProblem(p: CoursePayload): string | null {
+  if (!String(p.departmentName ?? '').trim()) return 'กรุณาเลือกสาขาวิชา'
+  if (!String(p.programName ?? '').trim()) return 'กรุณาเลือกประเภทหลักสูตร / โครงการ'
+  const capacity = Number(p.capacity)
+  if (!Number.isInteger(capacity) || capacity <= 0) return 'จำนวนที่รับสมัครต้องเป็นจำนวนเต็มมากกว่า 0'
+  if (p.minAlevelForeign && !String(p.foreignLanguageSubject ?? '').trim()) return 'กรุณาระบุชื่อภาษาต่างประเทศ'
+  return criteriaProblem(p)
+}
+
+// เกณฑ์ทั้ง 25 ช่อง: มีค่า = ตัวเลข, ไม่มี = null
+const criteriaData = (p: CoursePayload) =>
+  Object.fromEntries(CRITERIA_KEYS.map((k) => [k, p[k] === null || p[k] === undefined || p[k] === '' ? null : Number(p[k])]))
+
+// หา (หรือสร้าง) แถวสาขาในตาราง University ภายใต้คณะที่กำหนด
+// - เพิ่มหลักสูตร: คณะของเจ้าหน้าที่
+// - แก้ไขหลักสูตร: คณะเดิมของหลักสูตร (กัน Admin แก้แล้วหลักสูตรย้ายไปคณะของ Admin)
+// template = แถวมหาวิทยาลัยที่ใช้เป็นค่าเริ่มต้นของ name/code/campus ถ้าต้องสร้างสาขาใหม่
+async function resolveDepartment(
+  faculty: string | undefined,
+  departmentName: string,
+  template?: { name: string; code: string; campus: string } | null
+) {
+  if (!faculty) throw new Error('บัญชีนี้ยังไม่ได้ผูกกับคณะสังกัด')
+  const dept = departmentName.trim()
+  const existing = await prisma.university.findFirst({ where: { faculty, department: dept } })
+  if (existing) return existing.Universitiesid
+  const created = await prisma.university.create({
+    data: {
+      name: template?.name || 'มหาวิทยาลัยเกษตรศาสตร์',
+      code: template?.code || `UNIV-${Date.now().toString().slice(-4)}`,
+      campus: template?.campus || 'บางเขน',
+      faculty,
+      department: dept,
+    },
+  })
+  return created.Universitiesid
+}
+
+// ➕ เพิ่มหลักสูตรใหม่
+export async function createCourseAction(payload: CoursePayload) {
   try {
-    // 1. ค้นหาข้อมูลผู้ใช้งาน
-    const user = await prisma.user.findUnique({
-      where: { Usersid: userId },
-      include: { university: true },
-    })
+    const officer = await getLoggedInOfficer()
+    if (!officer) return { success: false, message: 'ต้องเข้าสู่ระบบด้วยบัญชีเจ้าหน้าที่คณะ' }
 
-    if (!user) {
-      return { success: false, message: 'ไม่พบข้อมูลผู้ใช้งาน' }
-    }
-
-    // 🔒 ตรวจค่าเกณฑ์ฝั่งเซิร์ฟเวอร์ (กันการส่งค่าข้ามฟอร์ม): GPA 0–4, คะแนนสอบ 0–100
-    const problem = validateCriteria(payload)
+    const problem = basicProblem(payload)
     if (problem) return { success: false, message: problem }
 
-    // 2. ค้นหาหรือระบุ universityId
-    let universityId = payload.universityId || user.universityId
-
-    if (payload.facultyName && payload.departmentName) {
-      const univ = await prisma.university.findFirst({
-        where: {
-          faculty: payload.facultyName,
-          department: payload.departmentName,
-        },
-      })
-
-      if (univ) {
-        universityId = univ.Universitiesid
-      } else {
-        // กรณีพิมพ์เพิ่มสาขาใหม่ (ใส่ name และ code ป้องกัน error จาก Required Field)
-        const newUniv = await prisma.university.create({
-          data: {
-            name: user?.university?.name || 'มหาวิทยาลัย',
-            code: user?.university?.code || `UNIV-${Date.now().toString().slice(-4)}`,
-            faculty: payload.facultyName,
-            department: payload.departmentName,
-            campus: user?.university?.campus || 'หลัก',
-          },
-        })
-        universityId = newUniv.Universitiesid
-      }
+    const id = String(payload.Program_Criteriaid ?? '').trim().toUpperCase()
+    if (!id) return { success: false, message: 'กรุณากรอกรหัสหลักสูตร' }
+    if (await prisma.programCriteria.findUnique({ where: { Program_Criteriaid: id } })) {
+      return { success: false, message: `รหัสหลักสูตร ${id} มีอยู่แล้ว กรุณาใช้รหัสอื่น` }
     }
 
-    // 3. บันทึกข้อมูลหลักสูตรและเกณฑ์ TCAS ทั้งหมดลงตาราง ProgramCriteria
-    const newCourse = await prisma.programCriteria.create({
+    const universityId = await resolveDepartment(officer.university?.faculty, payload.departmentName, officer.university)
+    const course = await prisma.programCriteria.create({
       data: {
-        Program_Criteriaid: payload.Program_Criteriaid || payload.criteriaId,
+        Program_Criteriaid: id,
         programName: payload.programName,
         capacity: Number(payload.capacity),
         isOpen: payload.isOpen ?? true,
-        additionals: payload.additionals || null,
-        foreignLanguageSubject: payload.foreignLanguageSubject || null,
-        universityId: universityId,
-
-        // GPAX & GPA รายกลุ่มสาระ
-        minGpax: payload.minGpax ? Number(payload.minGpax) : null,
-        minMathGpa: payload.minMathGpa ? Number(payload.minMathGpa) : null,
-        minSciGpa: payload.minSciGpa ? Number(payload.minSciGpa) : null,
-        minEngGpa: payload.minEngGpa ? Number(payload.minEngGpa) : null,
-        minThaiGpa: payload.minThaiGpa ? Number(payload.minThaiGpa) : null,
-        minSocialGpa: payload.minSocialGpa ? Number(payload.minSocialGpa) : null,
-        minHealthGpa: payload.minHealthGpa ? Number(payload.minHealthGpa) : null,
-        minArtGpa: payload.minArtGpa ? Number(payload.minArtGpa) : null,
-        minCareerGpa: payload.minCareerGpa ? Number(payload.minCareerGpa) : null,
-
-        // TGAT / TPAT
-        minTgat: payload.minTgat ? Number(payload.minTgat) : null,
-        minTpat1: payload.minTpat1 ? Number(payload.minTpat1) : null,
-        minTpat2: payload.minTpat2 ? Number(payload.minTpat2) : null,
-        minTpat3: payload.minTpat3 ? Number(payload.minTpat3) : null,
-        minTpat4: payload.minTpat4 ? Number(payload.minTpat4) : null,
-        minTpat5: payload.minTpat5 ? Number(payload.minTpat5) : null,
-
-        // A-Level
-        minAlevelMath1: payload.minAlevelMath1 ? Number(payload.minAlevelMath1) : null,
-        minAlevelMath2: payload.minAlevelMath2 ? Number(payload.minAlevelMath2) : null,
-        minAlevelSci: payload.minAlevelSci ? Number(payload.minAlevelSci) : null,
-        minAlevelPhy: payload.minAlevelPhy ? Number(payload.minAlevelPhy) : null,
-        minAlevelChem: payload.minAlevelChem ? Number(payload.minAlevelChem) : null,
-        minAlevelBio: payload.minAlevelBio ? Number(payload.minAlevelBio) : null,
-        minAlevelSoc: payload.minAlevelSoc ? Number(payload.minAlevelSoc) : null,
-        minAlevelThai: payload.minAlevelThai ? Number(payload.minAlevelThai) : null,
-        minAlevelEng: payload.minAlevelEng ? Number(payload.minAlevelEng) : null,
-        minAlevelForeign: payload.minAlevelForeign ? Number(payload.minAlevelForeign) : null,
+        additionals: payload.additionals?.trim() || null,
+        foreignLanguageSubject: payload.minAlevelForeign ? payload.foreignLanguageSubject?.trim() || null : null,
+        universityId,
+        ...criteriaData(payload),
       },
-      include: {
-        university: true,
+      include: { university: true },
+    })
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'CREATE_COURSE',
+        details: `เจ้าหน้าที่คณะ (${officer.name}) เพิ่มหลักสูตร ${course.programName} (${course.Program_Criteriaid}) สาขา ${course.university.department} รับ ${course.capacity} คน`,
+        userId: officer.Usersid,
       },
     })
 
-    // 4. บันทึกประวัติการสร้างหลักสูตรลงตาราง AuditLog
-    try {
-      const performerName = user.name || 'ผู้ใช้งาน'
-      const userRole = user.role || 'OFFICER'
-      const faculty = newCourse.university?.faculty || ''
-      const dept = newCourse.university?.department || ''
-
-      await prisma.auditLog.create({
-        data: {
-          action: 'CREATE_COURSE',
-          details: `${userRole === 'OFFICER' ? 'เจ้าหน้าที่คณะ' : 'อาจารย์'} (${performerName}) เพิ่มหลักสูตรใหม่: ${newCourse.programName} (${newCourse.Program_Criteriaid}) สังกัด ${faculty} (${dept}) รับจำนวน ${newCourse.capacity} คน`,
-          userId: userId,
-        },
-      })
-    } catch (logErr) {
-      console.error('AuditLog Error:', logErr)
-    }
-
-    revalidatePath('/officer/courses')
-    revalidatePath('/teacher/courses')
-    revalidatePath('/student/search')
-    revalidatePath('/admin/logs')
-
-    return { success: true, course: newCourse }
+    refresh()
+    return { success: true }
   } catch (err: any) {
     console.error('Create Course Error:', err)
     return { success: false, message: err?.message || 'เกิดข้อผิดพลาดในการสร้างหลักสูตร' }
+  }
+}
+
+// 🗑️ ลบหลักสูตร — ลบได้เฉพาะหลักสูตรที่ยังไม่มีผู้สมัคร (ถ้ามีแล้ว ให้ปิดรับสมัครแทน กันข้อมูลนักเรียนหาย)
+export async function deleteCourseAction(courseId: string) {
+  try {
+    const officer = await getLoggedInOfficer()
+    if (!officer) return { success: false, message: 'ต้องเข้าสู่ระบบด้วยบัญชีเจ้าหน้าที่คณะ' }
+
+    const course = await prisma.programCriteria.findUnique({
+      where: { Program_Criteriaid: courseId },
+      include: { university: true, _count: { select: { applications: true } } },
+    })
+    if (!course) return { success: false, message: 'ไม่พบหลักสูตรนี้ (อาจถูกลบไปแล้ว)' }
+    if (officer.role === 'OFFICER' && course.university.faculty !== officer.university?.faculty) {
+      return { success: false, message: 'ลบได้เฉพาะหลักสูตรในคณะของคุณ' }
+    }
+    if (course._count.applications > 0) {
+      return {
+        success: false,
+        message: `หลักสูตรนี้มีผู้สมัครแล้ว ${course._count.applications} คน ลบไม่ได้ — ถ้าไม่ต้องการรับเพิ่ม ให้กด "แก้ไข" แล้วเอาติ๊ก "เปิดรับสมัคร" ออกแทน`,
+      }
+    }
+
+    await prisma.programCriteria.delete({ where: { Program_Criteriaid: courseId } })
+    await prisma.auditLog.create({
+      data: {
+        action: 'DELETE_COURSE',
+        details: `เจ้าหน้าที่คณะ (${officer.name}) ลบหลักสูตร ${course.programName} (${courseId}) สาขา ${course.university.department}`,
+        userId: officer.Usersid,
+      },
+    })
+
+    refresh()
+    return { success: true }
+  } catch (err: any) {
+    console.error('Delete Course Error:', err)
+    return { success: false, message: err?.message || 'เกิดข้อผิดพลาดในการลบหลักสูตร' }
+  }
+}
+
+// ✏️ แก้ไขหลักสูตร (รหัสหลักสูตรแก้ไม่ได้ เพราะใบสมัครผูกกับรหัสนี้)
+export async function updateCourseAction(courseId: string, payload: CoursePayload) {
+  try {
+    const officer = await getLoggedInOfficer()
+    if (!officer) return { success: false, message: 'ต้องเข้าสู่ระบบด้วยบัญชีเจ้าหน้าที่คณะ' }
+
+    const old = await prisma.programCriteria.findUnique({
+      where: { Program_Criteriaid: courseId },
+      include: { university: true },
+    })
+    if (!old) return { success: false, message: 'ไม่พบหลักสูตรนี้' }
+    if (officer.role === 'OFFICER' && old.university.faculty !== officer.university?.faculty) {
+      return { success: false, message: 'แก้ไขได้เฉพาะหลักสูตรในคณะของคุณ' }
+    }
+
+    const problem = basicProblem(payload)
+    if (problem) return { success: false, message: problem }
+
+    // จำนวนรับต้องไม่น้อยกว่าคนที่คัดเลือกไปแล้ว
+    const passed = await prisma.application.count({
+      where: { criteriaId: courseId, status: { in: ['PASSED', 'CONFIRMED'] } },
+    })
+    const capacity = Number(payload.capacity)
+    if (capacity < passed) {
+      return { success: false, message: `อาจารย์คัดเลือกผ่านไปแล้ว ${passed} คน จำนวนรับต้องไม่น้อยกว่า ${passed}` }
+    }
+
+    const universityId = await resolveDepartment(old.university.faculty, payload.departmentName, old.university)
+    const newCriteria = criteriaData(payload)
+    const updated = await prisma.programCriteria.update({
+      where: { Program_Criteriaid: courseId },
+      data: {
+        programName: payload.programName,
+        capacity,
+        // เปิด/ปิดรับสมัครตามที่เจ้าหน้าที่เลือก (ถ้าเต็ม ระบบกันการสมัครเองจากจำนวนที่คัดเลือก)
+        isOpen: Boolean(payload.isOpen),
+        additionals: payload.additionals?.trim() || null,
+        foreignLanguageSubject: payload.minAlevelForeign ? payload.foreignLanguageSubject?.trim() || null : null,
+        universityId,
+        ...newCriteria,
+      },
+      include: { university: true },
+    })
+
+    // บันทึกว่าเปลี่ยนอะไรบ้าง
+    const changes: string[] = []
+    if (old.programName !== updated.programName) changes.push(`ประเภท ${old.programName} → ${updated.programName}`)
+    if (old.capacity !== updated.capacity) changes.push(`จำนวนรับ ${old.capacity} → ${updated.capacity}`)
+    if (old.university.department !== updated.university.department)
+      changes.push(`สาขา ${old.university.department} → ${updated.university.department}`)
+    for (const c of CRITERIA) {
+      const before = (old as any)[c.key] ?? null
+      const after = (newCriteria as any)[c.key] ?? null
+      if (before !== after) changes.push(`${criterionLabel(c.key)} ${before ?? '—'} → ${after ?? '—'}`)
+    }
+    await prisma.auditLog.create({
+      data: {
+        action: 'UPDATE_COURSE',
+        details: `เจ้าหน้าที่คณะ (${officer.name}) แก้ไขหลักสูตร ${courseId}: ${changes.join(', ') || 'ไม่มีการเปลี่ยนแปลงเกณฑ์'}`,
+        userId: officer.Usersid,
+      },
+    })
+
+    refresh()
+    return { success: true }
+  } catch (err: any) {
+    console.error('Update Course Error:', err)
+    return { success: false, message: err?.message || 'เกิดข้อผิดพลาดในการแก้ไขหลักสูตร' }
   }
 }

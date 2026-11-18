@@ -1,64 +1,27 @@
 'use server'
 
 import prisma from '@/lib/prisma'
-import { cookies } from 'next/headers'
-import jwt from 'jsonwebtoken'
+import { getLoggedInOfficer } from '@/lib/officerAuth'
 import { revalidatePath } from 'next/cache'
 import bcrypt from 'bcryptjs'
 import { isValidEmail, sendResetEmail, sendWelcomeEmail } from '@/lib/passwordReset'
 
+// เจ้าหน้าที่คณะที่ล็อกอินอยู่ (ใช้ helper กลางตัวเดียวกับหน้าหลักสูตร)
 async function getOfficerInfo() {
-  try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('token')?.value
-
-    let userEmail: string | undefined
-    let userId: string | undefined
-
-    if (token) {
-      try {
-        const decoded = jwt.decode(token) as any
-        userEmail = decoded?.email || decoded?.userEmail
-        userId = decoded?.id || decoded?.userId || decoded?.sub
-      } catch (e) {}
-    }
-
-    if (!userEmail) {
-      userEmail = cookieStore.get('user_email')?.value || cookieStore.get('email')?.value
-    }
-
-    const cookieUserId =
-      cookieStore.get('officer_id')?.value ||
-      cookieStore.get('userId')?.value ||
-      cookieStore.get('user_id')?.value
-
-    const orConditions = [
-      userEmail ? { email: userEmail } : null,
-      userId ? { Usersid: userId } : null,
-      cookieUserId ? { Usersid: cookieUserId } : null,
-    ].filter(Boolean) as any[]
-
-    if (orConditions.length === 0) return null
-
-    return await prisma.user.findFirst({
-      where: { OR: orConditions },
-      include: { university: true },
-    })
-  } catch (err) {
-    return null
-  }
+  const user = await getLoggedInOfficer()
+  return user?.role === 'OFFICER' ? user : null
 }
 
 export async function createTeacherData(formData: FormData) {
   try {
     const officer = await getOfficerInfo()
+    if (!officer) return { success: false, message: 'ต้องเข้าสู่ระบบด้วยบัญชีเจ้าหน้าที่คณะ' }
 
     const name = (formData.get('name') as string)?.trim()
     const email = (formData.get('email') as string)?.trim().toLowerCase()
     const rawPassword = (formData.get('password') as string)?.trim()
     const teacherId = (formData.get('teacherId') as string)?.trim()
     const department = (formData.get('department') as string)?.trim()
-    const formFaculty = (formData.get('faculty') as string)?.trim()
 
     if (!name || !email || !rawPassword || !department) {
       return { success: false, message: 'กรุณากรอกข้อมูลสำคัญให้ครบถ้วน' }
@@ -73,11 +36,11 @@ export async function createTeacherData(formData: FormData) {
     // 🔒 1. เข้ารหัสรหัสผ่าน (Hash Password) ก่อนบันทึกลง DB
     const hashedPassword = await bcrypt.hash(rawPassword, 10)
 
-    // 📌 ยึดคณะที่ Client ส่งมาเป็นหลัก
-    let faculty = formFaculty || officer?.university?.faculty
+    // 📌 คณะต้องเป็นคณะของเจ้าหน้าที่ที่ล็อกอินอยู่ (ไม่เชื่อค่าที่หน้าเว็บส่งมา)
+    const faculty = officer.university?.faculty
 
     if (!faculty) {
-      return { success: false, message: 'ไม่พบข้อมูลคณะสังกัด กรุณาระบุชื่อคณะ' }
+      return { success: false, message: 'บัญชีเจ้าหน้าที่ยังไม่ได้ผูกกับคณะสังกัด' }
     }
 
     const campus = officer?.university?.campus || 'บางเขน'
@@ -162,11 +125,99 @@ export async function createTeacherData(formData: FormData) {
   }
 }
 
+// ✏️ เจ้าหน้าที่แก้ไขข้อมูลอาจารย์ (ชื่อ อีเมล รหัสประจำตัว สาขา) — เฉพาะอาจารย์ในคณะเดียวกัน
+export async function updateTeacherData(
+  teacherUserId: string,
+  input: { name: string; email: string; teacherId: string; department: string }
+) {
+  try {
+    const officer = await getOfficerInfo()
+    if (!officer || officer.role !== 'OFFICER') {
+      return { success: false, message: 'ต้องเข้าสู่ระบบด้วยบัญชีเจ้าหน้าที่คณะ' }
+    }
+    const faculty = officer.university?.faculty
+    if (!faculty) return { success: false, message: 'บัญชีเจ้าหน้าที่ยังไม่ได้ผูกกับคณะสังกัด' }
+
+    const teacher = await prisma.user.findFirst({
+      where: { Usersid: teacherUserId, role: 'TEACHER' },
+      include: { university: true },
+    })
+    if (!teacher) return { success: false, message: 'ไม่พบบัญชีอาจารย์' }
+    if (teacher.university?.faculty !== faculty) return { success: false, message: 'แก้ไขได้เฉพาะอาจารย์ในคณะของคุณ' }
+
+    const name = input.name?.trim()
+    const email = input.email?.trim().toLowerCase()
+    const teacherId = input.teacherId?.trim()
+    const department = input.department?.trim()
+    if (!name || !email || !teacherId || !department) return { success: false, message: 'กรุณากรอกข้อมูลให้ครบทุกช่อง' }
+    if (!isValidEmail(email)) return { success: false, message: 'รูปแบบอีเมลไม่ถูกต้อง กรุณาใช้อีเมลจริงของอาจารย์' }
+
+    // สาขาภายใต้คณะของเจ้าหน้าที่ (ถ้ายังไม่มี สร้างใหม่)
+    let univ = await prisma.university.findFirst({ where: { faculty, department } })
+    if (!univ) {
+      univ = await prisma.university.create({
+        data: {
+          name: officer.university?.name || 'มหาวิทยาลัยเกษตรศาสตร์',
+          code: officer.university?.code || `UNIV-${Date.now().toString().slice(-4)}`,
+          campus: officer.university?.campus || 'บางเขน',
+          faculty,
+          department,
+        },
+      })
+    }
+
+    await prisma.user.update({
+      where: { Usersid: teacherUserId },
+      data: { name, email, teacherId, universityId: univ.Universitiesid },
+    })
+
+    // เปลี่ยนอีเมลแล้ว -> ยกเลิกลิงก์ตั้ง/รีเซ็ตรหัสผ่านที่เคยส่งไปอีเมลเก่า (กันคนถืออีเมลเก่ายึดบัญชี)
+    if (teacher.email !== email) {
+      await prisma.passwordResetToken.updateMany({
+        where: { userId: teacherUserId, usedAt: null },
+        data: { usedAt: new Date() },
+      })
+    }
+
+    const changes = [
+      teacher.name !== name && `ชื่อ ${teacher.name} → ${name}`,
+      teacher.email !== email && `อีเมล ${teacher.email} → ${email}`,
+      teacher.teacherId !== teacherId && `รหัส ${teacher.teacherId ?? '-'} → ${teacherId}`,
+      teacher.university?.department !== department && `สาขา ${teacher.university?.department ?? '-'} → ${department}`,
+    ].filter(Boolean)
+    await prisma.auditLog.create({
+      data: {
+        action: 'UPDATE_TEACHER',
+        details: `${officer.name} แก้ไขข้อมูลอาจารย์ ${teacherUserId}: ${changes.join(', ') || 'ไม่มีการเปลี่ยนแปลง'}`,
+        userId: officer.Usersid,
+      },
+    })
+
+    revalidatePath('/officer/teachers')
+    revalidatePath('/admin/users')
+    return {
+      success: true,
+      message: changes.length ? `บันทึกข้อมูลอาจารย์ ${name} แล้ว` : 'ไม่มีข้อมูลที่เปลี่ยนแปลง',
+      emailChanged: teacher.email !== email,
+    }
+  } catch (error: any) {
+    console.error('Update teacher error:', error)
+    if (error.code === 'P2002') {
+      const target = String(error.meta?.target ?? '')
+      return {
+        success: false,
+        message: target.includes('teacherId') ? 'รหัสประจำตัวอาจารย์นี้มีอยู่ในระบบแล้ว' : 'อีเมลนี้มีอยู่ในระบบแล้ว',
+      }
+    }
+    return { success: false, message: error.message || 'เกิดข้อผิดพลาดในการแก้ไขข้อมูลอาจารย์' }
+  }
+}
+
 // 📧 เจ้าหน้าที่ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลอาจารย์ (เฉพาะอาจารย์ในคณะเดียวกัน)
 export async function sendTeacherResetLink(teacherUserId: string) {
   try {
     const officer = await getOfficerInfo()
-    if (!officer || (officer.role !== 'OFFICER' && officer.role !== 'ADMIN')) {
+    if (!officer) {
       return { success: false, message: 'ไม่พบสิทธิ์ผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่' }
     }
 
@@ -202,6 +253,15 @@ export async function deleteTeacherData(teacherUserId: string) {
   try {
     const officer = await getOfficerInfo()
     if (!officer) return { success: false, message: 'ไม่พบสิทธิ์ผู้ใช้งาน' }
+
+    // ลบได้เฉพาะบัญชีอาจารย์ในคณะของเจ้าหน้าที่ (กันการส่งรหัสผู้ใช้อื่น เช่น แอดมิน มาลบ)
+    const target = await prisma.user.findFirst({
+      where: { Usersid: teacherUserId, role: 'TEACHER' },
+      include: { university: true },
+    })
+    if (!target || target.university?.faculty !== officer.university?.faculty) {
+      return { success: false, message: 'ลบได้เฉพาะบัญชีอาจารย์ในคณะของคุณ' }
+    }
 
     try {
       await prisma.auditLog.deleteMany({

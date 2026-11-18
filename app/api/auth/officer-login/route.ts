@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { clearSessionCookies } from '@/lib/sessionCookies'
 import prisma from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
@@ -78,6 +79,8 @@ export async function POST(req: Request) {
     }
 
     // 📌 บันทึก Cookie ให้ครบถ้วนสำหรับใช้ตรวจสอบใน Layout
+    // ล้าง cookie ของบทบาทอื่นที่อาจค้างอยู่ ก่อนตั้งของการล็อกอินครั้งนี้
+    clearSessionCookies(res)
     res.cookies.set('officer_id', user.Usersid, cookieOptions)
     res.cookies.set('userId', user.Usersid, cookieOptions)
     res.cookies.set('role', user.role, cookieOptions)

@@ -1,4 +1,6 @@
 import prisma from '@/lib/prisma'
+import { criteriaBadges } from '@/lib/courseCriteria'
+import ProposeChangeButton from './ProposeChangeButton'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { redirect } from 'next/navigation'
@@ -106,17 +108,8 @@ export default async function TeacherCoursesPage() {
 
             const isFull = passedApps >= course.capacity
 
-            const criteriaList = [
-              course.minGpax ? `GPAX ขั้นต่ำ: ${Number(course.minGpax).toFixed(2)}` : null,
-              course.minMathGpa ? `GPA คณิต: ${Number(course.minMathGpa).toFixed(2)}` : null,
-              course.minSciGpa ? `GPA วิทย์: ${Number(course.minSciGpa).toFixed(2)}` : null,
-              course.minEngGpa ? `GPA อังกฤษ: ${Number(course.minEngGpa).toFixed(2)}` : null,
-              course.minTgat ? `TGAT ขั้นต่ำ: ${Number(course.minTgat).toFixed(2)}` : null,
-              course.minTpat1 ? `TPAT1: ${Number(course.minTpat1).toFixed(2)}` : null,
-              course.minTpat3 ? `TPAT3: ${Number(course.minTpat3).toFixed(2)}` : null,
-              course.minAlevelMath1 ? `A-Level Math1: ${Number(course.minAlevelMath1).toFixed(2)}` : null,
-              course.minAlevelEng ? `A-Level Eng: ${Number(course.minAlevelEng).toFixed(2)}` : null,
-            ].filter(Boolean)
+            // ใช้รายการเกณฑ์กลาง -> แสดงครบทั้ง 25 เกณฑ์เหมือนหน้าเจ้าหน้าที่
+            const criteriaList = criteriaBadges(course as any)
 
             return (
               <div
@@ -131,7 +124,11 @@ export default async function TeacherCoursesPage() {
                       </span>
                       <h2 className="text-base font-bold text-slate-900">{course.programName}</h2>
 
-                      {!isFull ? (
+                      {!isFull && !course.isOpen ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                          ปิดรับสมัคร
+                        </span>
+                      ) : !isFull ? (
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                           เปิดรับสมัคร
                         </span>
@@ -157,6 +154,9 @@ export default async function TeacherCoursesPage() {
                           (สมัครรวม {totalApps} คน)
                         </span>
                       </p>
+                      <div className="flex justify-end mt-2">
+                        <ProposeChangeButton courseId={course.Program_Criteriaid} programName={course.programName} />
+                      </div>
                     </div>
                   </div>
                 </div>

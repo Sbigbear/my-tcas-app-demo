@@ -271,7 +271,8 @@ export default function UserListClient({
                     <button
                       onClick={async () => {
                         if (confirm(`คุณต้องการลบผู้ใช้งาน "${user.name}" หรือไม่?`)) {
-                          await deleteUserData(user.id, user.type)
+                          const r = await deleteUserData(user.id, user.type)
+                          if (!r.success) setNotice({ type: 'warning', text: r.message })
                         }
                       }}
                       className="text-red-500 hover:text-red-700 cursor-pointer p-1 rounded hover:bg-red-50 transition"

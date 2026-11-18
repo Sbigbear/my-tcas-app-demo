@@ -8,6 +8,10 @@ import { isValidEmail, sendResetEmail, sendWelcomeEmail } from '@/lib/passwordRe
 
 export async function createUserData(formData: FormData) {
   try {
+    // 🔒 server action เรียกจากภายนอกได้ -> ต้องเป็น ADMIN ที่ล็อกอินอยู่เท่านั้น
+    const admin = await getAdminUser()
+    if (!admin) return { success: false, message: 'ต้องเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ' }
+
     const name = formData.get('name') as string
     const email = ((formData.get('email') as string) || '').trim().toLowerCase()
     const rawPassword = formData.get('password') as string
@@ -151,7 +155,6 @@ export async function createUserData(formData: FormData) {
     revalidatePath('/admin/logs')
 
     // 📧 5. ส่งอีเมลต้อนรับ + ลิงก์ให้ผู้ใช้ตั้งรหัสผ่านเอง
-    const admin = await getAdminUser()
     const mail = await sendWelcomeEmail(user, admin?.name)
 
     return { success: true, mailSent: mail.sent, mailError: mail.error, email: user.email }
@@ -200,6 +203,11 @@ export async function sendUserResetLink(userId: string) {
 
 export async function deleteUserData(id: string, type: 'USER' | 'STUDENT') {
   try {
+    // 🔒 ต้องเป็น ADMIN ที่ล็อกอินอยู่ และห้ามลบบัญชีตัวเอง (กันไม่มีแอดมินเหลือ)
+    const admin = await getAdminUser()
+    if (!admin) return { success: false, message: 'ต้องเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ' }
+    if (type === 'USER' && id === admin.Usersid) return { success: false, message: 'ไม่สามารถลบบัญชีของตัวเองได้' }
+
     if (type === 'STUDENT') {
       await prisma.application.deleteMany({
         where: { studentId: id },
