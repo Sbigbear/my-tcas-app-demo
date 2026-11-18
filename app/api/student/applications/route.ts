@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { cookies } from 'next/headers'
 
+// นักเรียนที่ล็อกอินอยู่ (cookie student_id ตั้งโดย /api/auth/student-login เท่านั้น)
+async function getLoggedInStudentId() {
+  const cookieStore = await cookies()
+  return cookieStore.get('student_id')?.value || null
+}
+
 // 📌 ฟังก์ชันคำนวณและประมวลผลคุณสมบัติแบบอัตโนมัติอิงจากเกรดและคะแนนจริง
 function evaluateEligibility(student: any, criteria: any) {
   const failedReasons: string[] = []
@@ -96,20 +102,18 @@ function evaluateEligibility(student: any, criteria: any) {
 // 1. ฟังก์ชัน GET (ดึงรายการสมัคร + คำนวณและสั่ง UPDATE ซิงก์ลง MySQL ทันที)
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const studentIdParam = searchParams.get('studentId')
-
-    if (!studentIdParam) {
+    // 🔒 ดูได้เฉพาะใบสมัครของนักเรียนที่ล็อกอินอยู่
+    //    (เดิมรับ ?studentId= จาก URL ทำให้เดารหัสนักเรียนแล้วดูคะแนน/ใบสมัครของคนอื่นได้ — ตอนนี้ไม่ใช้ค่านั้นแล้ว)
+    const loggedInStudentId = await getLoggedInStudentId()
+    if (!loggedInStudentId) {
       return NextResponse.json(
-        { success: false, message: 'กรุณาระบุ studentId' },
-        { status: 400 }
+        { success: false, message: 'กรุณาเข้าสู่ระบบด้วยบัญชีนักเรียน' },
+        { status: 401 }
       )
     }
 
     const student = await prisma.student.findFirst({
-      where: {
-        OR: [{ Studentsid: studentIdParam }, { studentCode: studentIdParam }],
-      },
+      where: { Studentsid: loggedInStudentId },
       include: {
         tcasScores: true,
       },
@@ -188,7 +192,7 @@ export async function GET(request: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { criteriaId, studentId: bodyStudentId } = body
+    const { criteriaId } = body
 
     if (!criteriaId) {
       return NextResponse.json(
@@ -197,13 +201,14 @@ export async function POST(req: Request) {
       )
     }
 
-    const cookieStore = await cookies()
-    const cookieStudentId =
-      cookieStore.get('student_id')?.value ||
-      cookieStore.get('userId')?.value ||
-      cookieStore.get('user_id')?.value
-
-    const targetStudentId = bodyStudentId || cookieStudentId
+    // 🔒 สมัครได้เฉพาะในนามนักเรียนที่ล็อกอินอยู่ (ไม่รับ studentId จากหน้าเว็บ กันสมัครแทนคนอื่น)
+    const targetStudentId = await getLoggedInStudentId()
+    if (!targetStudentId) {
+      return NextResponse.json(
+        { success: false, message: 'กรุณาเข้าสู่ระบบด้วยบัญชีนักเรียนก่อนสมัคร' },
+        { status: 401 }
+      )
+    }
 
     // 📌 ดึงข้อมูลนักเรียนพร้อมคะแนน TCAS
     let student = null

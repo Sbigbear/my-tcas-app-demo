@@ -28,20 +28,8 @@ export default function StudentApplicationsPage() {
   useEffect(() => {
     async function fetchMyApplications() {
       try {
-        const studentId =
-          typeof window !== 'undefined'
-            ? localStorage.getItem('studentId')
-            : null
-
-        if (!studentId) {
-          setErrorMsg('ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาล็อกอินใหม่อีกครั้ง')
-          setLoading(false)
-          return
-        }
-
-        const res = await fetch(
-          `/api/student/applications?studentId=${encodeURIComponent(studentId)}`
-        )
+        // เซิร์ฟเวอร์ระบุตัวนักเรียนจากการล็อกอิน (cookie) เอง ไม่ต้องส่งรหัสนักเรียนไป
+        const res = await fetch('/api/student/applications', { cache: 'no-store' })
         const data = await res.json()
 
         if (data.success) {
