@@ -1,7 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { createUserData, deleteUserData } from './actions'
+import { createUserData, deleteUserData, sendUserResetLink } from './actions'
+import { KeyRound } from 'lucide-react'
+
+type Notice = { type: 'success' | 'warning'; text: string }
 
 type FormattedUser = {
   id: string
@@ -30,6 +33,18 @@ export default function UserListClient({
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [sendingId, setSendingId] = useState<string | null>(null)
+
+  // ส่งลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล
+  const handleSendReset = async (user: FormattedUser) => {
+    if (!confirm(`ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${user.email} ใช่หรือไม่?`)) return
+    setSendingId(user.id)
+    const res = await sendUserResetLink(user.id)
+    setSendingId(null)
+    setNotice({ type: res.success ? 'success' : 'warning', text: res.message })
+  }
   const [selectedRole, setSelectedRole] = useState<'OFFICER' | 'TEACHER' | 'ADMIN'>('OFFICER')
   const [activeTab, setActiveTab] = useState<'ALL' | 'OFFICER' | 'TEACHER' | 'STUDENT' | 'ADMIN'>('ALL')
 
@@ -79,12 +94,28 @@ export default function UserListClient({
           </p>
         </div>
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            setFormError(null)
+            setIsOpen(true)
+          }}
           className="px-4 py-2 bg-[#07382B] text-white text-sm font-bold rounded-xl hover:bg-[#05281f] transition cursor-pointer shadow-sm"
         >
           + เพิ่มผู้ใช้งาน
         </button>
       </div>
+
+      {notice && (
+        <div
+          className={`p-3 rounded-xl border text-xs flex items-start justify-between gap-3 ${
+            notice.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-300 text-amber-900'
+          }`}
+        >
+          <span>{notice.text}</span>
+          <button onClick={() => setNotice(null)} className="opacity-60 hover:opacity-100 cursor-pointer">
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* แท็บตัวเลือกแบ่งหมวดหมู่ */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
@@ -226,7 +257,17 @@ export default function UserListClient({
                       ใช้งาน
                     </span>
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="p-4 text-center whitespace-nowrap">
+                    {user.type === 'USER' && (
+                      <button
+                        onClick={() => handleSendReset(user)}
+                        disabled={sendingId === user.id}
+                        className="text-[#07382B] cursor-pointer p-1 rounded hover:bg-emerald-50 transition disabled:opacity-40 align-middle"
+                        title="ส่งลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล"
+                      >
+                        <KeyRound className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       onClick={async () => {
                         if (confirm(`คุณต้องการลบผู้ใช้งาน "${user.name}" หรือไม่?`)) {
@@ -259,11 +300,22 @@ export default function UserListClient({
 
             <form
               action={async (formData) => {
-                await createUserData(formData)
+                setFormError(null)
+                const res = await createUserData(formData)
+                if (!res.success) {
+                  setFormError(res.message ?? 'เกิดข้อผิดพลาด')
+                  return
+                }
                 setIsOpen(false)
+                setNotice(
+                  res.mailSent
+                    ? { type: 'success', text: `เพิ่มผู้ใช้งานแล้ว และส่งอีเมลต้อนรับพร้อมลิงก์ตั้งรหัสผ่านไปที่ ${res.email} แล้ว` }
+                    : { type: 'warning', text: `เพิ่มผู้ใช้งานแล้ว แต่ส่งอีเมลต้อนรับไม่สำเร็จ (${res.mailError})` }
+                )
               }}
               className="space-y-4 text-sm"
             >
+              {formError && <div className="p-2.5 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs">{formError}</div>}
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
                   ชื่อ-นามสกุล <span className="text-red-500">*</span>
@@ -285,7 +337,7 @@ export default function UserListClient({
                   name="email"
                   type="email"
                   required
-                  placeholder="user@ku.th"
+                  placeholder="อีเมลจริงของผู้ใช้ เช่น somsri.k@gmail.com"
                   className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-[#07382B] text-xs"
                 />
               </div>
@@ -324,11 +376,12 @@ export default function UserListClient({
                 <>
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      รหัสประจำตัว {selectedRole === 'TEACHER' ? 'อาจารย์' : 'เจ้าหน้าที่'}
+                      รหัสประจำตัว {selectedRole === 'TEACHER' ? 'อาจารย์' : 'เจ้าหน้าที่'} <span className="text-red-500">*</span>
                     </label>
                     <input
                       name="teacherId"
                       type="text"
+                      required
                       placeholder={selectedRole === 'TEACHER' ? 'เช่น T67014' : 'เช่น O67001'}
                       className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-[#07382B] text-xs font-mono"
                     />

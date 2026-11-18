@@ -228,14 +228,9 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 [แก้ข้อ 3.2] ดึงเกณฑ์ของหลักสูตร พร้อมนับจำนวนผู้สมัครปัจจุบัน (_count)
+    // 📌 [แก้ข้อ 3.2] ดึงเกณฑ์ของหลักสูตร
     const criteria = await prisma.programCriteria.findUnique({
       where: { Program_Criteriaid: criteriaId },
-      include: {
-        _count: {
-          select: { applications: true },
-        },
-      },
     })
 
     if (!criteria) {
@@ -253,12 +248,19 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 เช็กว่าผู้สมัครเต็มโควตา (capacity) หรือยัง
-    if (criteria.capacity && criteria._count.applications >= criteria.capacity) {
-      return NextResponse.json(
-        { success: false, message: 'หลักสูตรนี้มีผู้สมัครเต็มจำนวนโควตาแล้ว' },
-        { status: 400 }
-      )
+    // 📌 เช็กว่าเต็มโควตา (capacity) หรือยัง — นับเฉพาะคนที่อาจารย์คัดเลือกแล้ว (PASSED/CONFIRMED)
+    //    ผู้สมัครที่ยังรอพิจารณา (PENDING/ELIGIBLE) ไม่กินโควตา เพราะอาจไม่ถูกเลือก
+    //    (ใช้เกณฑ์เดียวกับหน้าค้นหา/หน้าอาจารย์/หน้าเจ้าหน้าที่ และ updateApplicationStatus)
+    if (criteria.capacity) {
+      const passedCount = await prisma.application.count({
+        where: { criteriaId, status: { in: ['PASSED', 'CONFIRMED'] } },
+      })
+      if (passedCount >= criteria.capacity) {
+        return NextResponse.json(
+          { success: false, message: 'หลักสูตรนี้คัดเลือกผู้ผ่านครบจำนวนที่รับแล้ว' },
+          { status: 400 }
+        )
+      }
     }
 
     // ตรวจสอบการสมัครซ้ำ

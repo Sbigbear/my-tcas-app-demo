@@ -243,9 +243,14 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  รหัสผ่าน
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700">รหัสผ่าน</label>
+                  {role !== 'student' && (
+                    <a href="/forgot-password" className="text-xs font-semibold text-[#07382B] hover:underline">
+                      ลืมรหัสผ่าน?
+                    </a>
+                  )}
+                </div>
                 <input
                   type="password"
                   required

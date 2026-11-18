@@ -12,6 +12,23 @@ interface DepartmentOption {
   campusName?: string
 }
 
+// ประเภทหลักสูตร/โครงการ ให้เลือกแทนการพิมพ์
+const PROGRAM_TYPES = [
+  'ภาคปกติ',
+  'ภาคพิเศษ',
+  'หลักสูตรนานาชาติ',
+  'โครงการเรียนดี',
+  'โครงการผู้มีความสามารถพิเศษ',
+  'โครงการรับนักเรียนในพื้นที่',
+  'โครงการความร่วมมือ (MOU)',
+]
+
+// ตัวเลือกคะแนนขั้นต่ำ: GPA 1.50–4.00 (ทีละ 0.25), คะแนนสอบ 10–100 (ทีละ 5)
+const range = (from: number, to: number, step: number, digits: number) =>
+  Array.from({ length: Math.round((to - from) / step) + 1 }, (_, i) => (from + i * step).toFixed(digits))
+const GPA_OPTIONS = range(1.5, 4, 0.25, 2)
+const SCORE_OPTIONS = range(10, 100, 5, 0)
+
 interface CriteriaState {
   active: boolean
   value: string
@@ -145,7 +162,7 @@ export default function AddCourseModal({
         return false
       }
       if (!programName.trim()) {
-        setErrorMessage('กรุณากรอกชื่อหลักสูตร / โครงการ')
+        setErrorMessage('กรุณาเลือกประเภทหลักสูตร / โครงการ')
         return false
       }
       if (!capacity || Number(capacity) <= 0) {
@@ -280,16 +297,18 @@ export default function AddCourseModal({
 
         {item.active && (
           <div>
-            <input
-              type="number"
-              step={item.step}
-              min="0"
-              max={item.max}
-              placeholder={`ระบุคะแนนขั้นต่ำ (สูงสุด ${item.max})`}
+            <select
               value={item.value}
               onChange={(e) => handleValueChange(setter, key, e.target.value)}
-              className="w-full px-3 py-1.5 text-xs border border-amber-300 bg-amber-50/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A6B50] font-medium text-slate-900"
-            />
+              className="w-full px-3 py-1.5 text-xs border border-amber-300 bg-amber-50/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A6B50] font-medium text-slate-900 cursor-pointer"
+            >
+              <option value="">-- เลือก{item.max === 4 ? 'เกรด' : 'คะแนน'}ขั้นต่ำ (สูงสุด {item.max}) --</option>
+              {(item.max === 4 ? GPA_OPTIONS : SCORE_OPTIONS).map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
           </div>
         )}
       </div>
@@ -472,13 +491,21 @@ export default function AddCourseModal({
                   {/* ชื่อโครงการ */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">ชื่อหลักสูตร / โครงการ <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      placeholder="เช่น ภาคปกติ, ภาคพิเศษ, โครงการเรียนดี"
+                    <select
                       value={programName}
-                      onChange={(e) => setProgramName(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0A6B50] text-slate-800"
-                    />
+                      onChange={(e) => {
+                        setErrorMessage(null)
+                        setProgramName(e.target.value)
+                      }}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0A6B50] text-slate-800 bg-white cursor-pointer"
+                    >
+                      <option value="">-- เลือกประเภทหลักสูตร / โครงการ --</option>
+                      {PROGRAM_TYPES.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* จำนวนรับ */}

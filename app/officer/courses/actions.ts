@@ -3,6 +3,33 @@
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
+const GPA_KEYS = [
+  'minGpax', 'minMathGpa', 'minSciGpa', 'minEngGpa', 'minThaiGpa',
+  'minSocialGpa', 'minHealthGpa', 'minArtGpa', 'minCareerGpa',
+]
+const SCORE_KEYS = [
+  'minTgat', 'minTpat1', 'minTpat2', 'minTpat3', 'minTpat4', 'minTpat5',
+  'minAlevelMath1', 'minAlevelMath2', 'minAlevelSci', 'minAlevelPhy', 'minAlevelChem',
+  'minAlevelBio', 'minAlevelSoc', 'minAlevelThai', 'minAlevelEng', 'minAlevelForeign',
+]
+
+function validateCriteria(payload: any): string | null {
+  if (!String(payload.programName ?? '').trim()) return 'กรุณาเลือกประเภทหลักสูตร / โครงการ'
+  const capacity = Number(payload.capacity)
+  if (!Number.isInteger(capacity) || capacity <= 0) return 'จำนวนที่รับสมัครต้องเป็นจำนวนเต็มมากกว่า 0'
+
+  const check = (keys: string[], max: number) => {
+    for (const k of keys) {
+      const v = payload[k]
+      if (v === null || v === undefined || v === '') continue
+      const n = Number(v)
+      if (!Number.isFinite(n) || n < 0 || n > max) return `ค่าเกณฑ์ ${k} = ${v} ไม่ถูกต้อง (ต้องอยู่ระหว่าง 0–${max})`
+    }
+    return null
+  }
+  return check(GPA_KEYS, 4) ?? check(SCORE_KEYS, 100)
+}
+
 export async function createCourseAction(payload: any, userId: string) {
   try {
     // 1. ค้นหาข้อมูลผู้ใช้งาน
@@ -14,6 +41,10 @@ export async function createCourseAction(payload: any, userId: string) {
     if (!user) {
       return { success: false, message: 'ไม่พบข้อมูลผู้ใช้งาน' }
     }
+
+    // 🔒 ตรวจค่าเกณฑ์ฝั่งเซิร์ฟเวอร์ (กันการส่งค่าข้ามฟอร์ม): GPA 0–4, คะแนนสอบ 0–100
+    const problem = validateCriteria(payload)
+    if (problem) return { success: false, message: problem }
 
     // 2. ค้นหาหรือระบุ universityId
     let universityId = payload.universityId || user.universityId

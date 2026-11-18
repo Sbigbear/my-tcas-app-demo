@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
 import { revalidatePath } from 'next/cache'
 import bcrypt from 'bcryptjs'
+import { isValidEmail, sendResetEmail, sendWelcomeEmail } from '@/lib/passwordReset'
 
 async function getOfficerInfo() {
   try {
@@ -53,7 +54,7 @@ export async function createTeacherData(formData: FormData) {
     const officer = await getOfficerInfo()
 
     const name = (formData.get('name') as string)?.trim()
-    const email = (formData.get('email') as string)?.trim()
+    const email = (formData.get('email') as string)?.trim().toLowerCase()
     const rawPassword = (formData.get('password') as string)?.trim()
     const teacherId = (formData.get('teacherId') as string)?.trim()
     const department = (formData.get('department') as string)?.trim()
@@ -61,6 +62,12 @@ export async function createTeacherData(formData: FormData) {
 
     if (!name || !email || !rawPassword || !department) {
       return { success: false, message: 'กรุณากรอกข้อมูลสำคัญให้ครบถ้วน' }
+    }
+    if (!isValidEmail(email)) {
+      return { success: false, message: 'รูปแบบอีเมลไม่ถูกต้อง กรุณาใช้อีเมลจริงของอาจารย์' }
+    }
+    if (!teacherId) {
+      return { success: false, message: 'กรุณากรอกรหัสประจำตัวอาจารย์' }
     }
 
     // 🔒 1. เข้ารหัสรหัสผ่าน (Hash Password) ก่อนบันทึกลง DB
@@ -133,16 +140,60 @@ export async function createTeacherData(formData: FormData) {
       },
     })
 
+    // 📧 3. ส่งอีเมลต้อนรับ + ลิงก์ให้อาจารย์ตั้งรหัสผ่านเอง
+    const mail = await sendWelcomeEmail(newTeacher, officer?.name)
+
     revalidatePath('/officer/teachers')
     revalidatePath('/admin/users')
 
-    return { success: true, data: newTeacher }
+    return { success: true, mailSent: mail.sent, mailError: mail.error, email: newTeacher.email }
   } catch (error: any) {
     console.error('Create teacher error:', error)
     if (error.code === 'P2002') {
-      return { success: false, message: 'อีเมลนี้ถูกใช้งานในระบบแล้ว' }
+      const target = String(error.meta?.target ?? '')
+      return {
+        success: false,
+        message: target.includes('teacherId')
+          ? 'รหัสประจำตัวอาจารย์นี้มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น'
+          : 'อีเมลนี้มีอยู่ในระบบแล้ว',
+      }
     }
     return { success: false, message: error.message || 'เกิดข้อผิดพลาดในการเพิ่มอาจารย์' }
+  }
+}
+
+// 📧 เจ้าหน้าที่ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลอาจารย์ (เฉพาะอาจารย์ในคณะเดียวกัน)
+export async function sendTeacherResetLink(teacherUserId: string) {
+  try {
+    const officer = await getOfficerInfo()
+    if (!officer || (officer.role !== 'OFFICER' && officer.role !== 'ADMIN')) {
+      return { success: false, message: 'ไม่พบสิทธิ์ผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่' }
+    }
+
+    const teacher = await prisma.user.findFirst({
+      where: { Usersid: teacherUserId, role: 'TEACHER' },
+      include: { university: true },
+    })
+    if (!teacher) return { success: false, message: 'ไม่พบบัญชีอาจารย์' }
+    if (officer.role === 'OFFICER' && teacher.university?.faculty !== officer.university?.faculty) {
+      return { success: false, message: 'ส่งลิงก์ได้เฉพาะอาจารย์ในคณะของคุณ' }
+    }
+
+    const mail = await sendResetEmail(teacher, officer.name)
+    await prisma.auditLog.create({
+      data: {
+        action: 'PASSWORD_RESET_LINK_SENT',
+        details: `${officer.name} ส่งลิงก์รีเซ็ตรหัสผ่านให้ ${teacher.name} (${teacher.email}) — ${mail.sent ? 'ส่งอีเมลแล้ว' : `ส่งไม่สำเร็จ: ${mail.error}`}`,
+        userId: officer.Usersid,
+      },
+    })
+
+    return mail.sent
+      ? { success: true, message: `ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${teacher.email} แล้ว` }
+      : { success: false, message: `ส่งอีเมลไม่สำเร็จ: ${mail.error}` }
+  } catch (error: any) {
+    console.error('Send teacher reset link error:', error)
+    return { success: false, message: error.message || 'เกิดข้อผิดพลาดในการส่งลิงก์' }
   }
 }
 

@@ -1,8 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { createTeacherData, deleteTeacherData } from './actions'
-import { UserPlus, Search, Trash2, Building } from 'lucide-react'
+import { createTeacherData, deleteTeacherData, sendTeacherResetLink } from './actions'
+import { UserPlus, Search, Trash2, Building, KeyRound } from 'lucide-react'
+
+type Notice = { type: 'success' | 'warning' | 'error'; text: string }
+const NOTICE_STYLE = {
+  success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+  warning: 'bg-amber-50 border-amber-300 text-amber-900',
+  error: 'bg-red-50 border-red-200 text-red-700',
+} as const
 
 type TeacherItem = {
   id: string
@@ -25,6 +32,18 @@ export default function TeacherClient({
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [sendingId, setSendingId] = useState<string | null>(null)
+
+  // ส่งลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล
+  const handleSendReset = async (teacher: TeacherItem) => {
+    if (!confirm(`ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${teacher.email} ใช่หรือไม่?`)) return
+    setSendingId(teacher.id)
+    const res = await sendTeacherResetLink(teacher.id)
+    setSendingId(null)
+    setNotice({ type: res.success ? 'success' : 'warning', text: res.message })
+  }
   const [selectedDeptMode, setSelectedDeptMode] = useState<'SELECT' | 'CUSTOM'>(
     existingDepartments.length > 0 ? 'SELECT' : 'CUSTOM'
   )
@@ -48,13 +67,22 @@ export default function TeacherClient({
           </p>
         </div>
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={() => { setFormError(null); setIsOpen(true) }}
           className="px-4 py-2 bg-[#07382B] text-white text-xs font-bold rounded-xl hover:bg-[#05281f] transition cursor-pointer shadow-sm flex items-center justify-center gap-2"
         >
           <UserPlus className="w-4 h-4" />
           + เพิ่มอาจารย์ประจำสาขา
         </button>
       </div>
+
+      {notice && (
+        <div className={`p-3 rounded-xl border text-xs flex items-start justify-between gap-3 ${NOTICE_STYLE[notice.type]}`}>
+          <span>{notice.text}</span>
+          <button onClick={() => setNotice(null)} className="opacity-60 hover:opacity-100 cursor-pointer">
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* ค้นหา */}
       <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-2">
@@ -103,7 +131,15 @@ export default function TeacherClient({
                       {teacher.department}
                     </span>
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="p-4 text-center whitespace-nowrap">
+                    <button
+                      onClick={() => handleSendReset(teacher)}
+                      disabled={sendingId === teacher.id}
+                      className="text-[#07382B] hover:text-[#05281f] p-1.5 rounded-lg hover:bg-emerald-50 transition cursor-pointer disabled:opacity-40"
+                      title="ส่งลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={async () => {
                         if (confirm(`คุณต้องการลบบัญชีอาจารย์ "${teacher.name}" หรือไม่?`)) {
@@ -139,11 +175,22 @@ export default function TeacherClient({
                 // 📌 แนบ faculty และ officerUserId ติดไปใน FormData ด้วยเสมอ
                 formData.append('faculty', facultyName)
                 if (officerUserId) formData.append('officerUserId', officerUserId)
-                await createTeacherData(formData)
+                setFormError(null)
+                const res = await createTeacherData(formData)
+                if (!res.success) {
+                  setFormError(res.message ?? 'เกิดข้อผิดพลาด')
+                  return
+                }
                 setIsOpen(false)
+                setNotice(
+                  res.mailSent
+                    ? { type: 'success', text: `เพิ่มอาจารย์แล้ว และส่งอีเมลต้อนรับพร้อมลิงก์ตั้งรหัสผ่านไปที่ ${res.email} แล้ว` }
+                    : { type: 'warning', text: `เพิ่มอาจารย์แล้ว แต่ส่งอีเมลต้อนรับไม่สำเร็จ (${res.mailError})` }
+                )
               }}
               className="space-y-4 text-xs"
             >
+              {formError && <div className="p-2.5 rounded-xl border border-red-200 bg-red-50 text-red-700">{formError}</div>}
               <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 flex items-center gap-2">
                 <Building className="w-4 h-4 text-[#07382B]" />
                 <span>สังกัดคณะ: <strong className="text-slate-900">{facultyName}</strong></span>
@@ -170,7 +217,7 @@ export default function TeacherClient({
                   name="email"
                   type="email"
                   required
-                  placeholder="teacher@ku.ac.th"
+                  placeholder="อีเมลจริงของอาจารย์ เช่น somchai.j@gmail.com"
                   className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-[#07382B]"
                 />
               </div>
@@ -190,11 +237,12 @@ export default function TeacherClient({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  รหัสประจำตัวอาจารย์ (Teacher ID)
+                  รหัสประจำตัวอาจารย์ (Teacher ID) <span className="text-red-500">*</span>
                 </label>
                 <input
                   name="teacherId"
                   type="text"
+                  required
                   placeholder="เช่น T67014"
                   className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-[#07382B] font-mono"
                 />

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
-import { ApplicationStatus } from '@prisma/client'
+import { setApplicationStatusAsTeacher } from '@/lib/applicationStatus'
 
 // GET: ดึงข้อมูลรายการ/เกณฑ์สำหรับอาจารย์ใช้อ่านและคัดเลือก
 export async function GET(request: Request) {
@@ -74,28 +74,13 @@ export async function PUT(req: Request) {
       )
     }
 
-    // 💡 ป้องกัน Error ข้อ 1: ตรวจสอบและแปลง Status ให้ตรงตาม Prisma Enum
-    // ใน Schema Enum มี: PENDING, ELIGIBLE, INELIGIBLE, PASSED, CONFIRMED, CANCELLED (ไม่มี REJECTED)
-    let updatedStatus: ApplicationStatus
-
-    if (status === 'PASSED' || status === ApplicationStatus.PASSED) {
-      updatedStatus = ApplicationStatus.PASSED
-    } else if (status === 'REJECTED' || status === 'INELIGIBLE' || status === ApplicationStatus.INELIGIBLE) {
-      // หากฝั่ง Frontend ส่ง 'REJECTED' หรือ 'INELIGIBLE' มา ให้แมปเป็น INELIGIBLE เสมอ
-      updatedStatus = ApplicationStatus.INELIGIBLE
-    } else {
-      updatedStatus = status as ApplicationStatus
+    // 🔒 ตรวจว่าเป็นอาจารย์ที่ล็อกอินอยู่ + ใบสมัครอยู่ในสังกัด + สถานะที่อาจารย์ตั้งได้ + ไม่เกินโควตา
+    const result = await setApplicationStatusAsTeacher(String(applicationId), String(status), remark ?? null)
+    if (!result.success) {
+      return NextResponse.json({ success: false, message: result.message }, { status: result.httpStatus })
     }
 
-    const updatedApplication = await prisma.application.update({
-      where: { Applicationsid: applicationId },
-      data: {
-        status: updatedStatus,
-        remark: remark || null,
-        evaluatedAt: new Date(),
-      },
-    })
-
+    const updatedApplication = await prisma.application.findUnique({ where: { Applicationsid: String(applicationId) } })
     return NextResponse.json({ success: true, data: updatedApplication })
   } catch (error: any) {
     console.error('Teacher evaluation error:', error)

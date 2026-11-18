@@ -1,46 +1,18 @@
 'use server'
 
-import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { setApplicationStatusAsTeacher } from '@/lib/applicationStatus'
 
-export async function updateApplicationStatus(
-  applicationId: string,
-  newStatus: 'PASSED' | 'PENDING' | 'REJECTED'
-) {
+// ปุ่ม "รับผ่านการคัดเลือก" / "ยกเลิกผล" ในหน้ารายชื่อผู้สมัครของอาจารย์
+// (server action เรียกจากภายนอกได้เหมือน API จึงต้องตรวจสิทธิ์ทุกครั้ง — ทำใน setApplicationStatusAsTeacher)
+export async function updateApplicationStatus(applicationId: string, newStatus: 'PASSED' | 'PENDING' | 'REJECTED') {
   try {
-    // 1. อัปเดตสถานะการคัดเลือกของผู้สมัคร
-    const app: any = await prisma.application.update({
-      where: { Applicationsid: applicationId },
-      data: { status: newStatus as any },
-      include: { criteria: true },
-    })
+    const result = await setApplicationStatusAsTeacher(applicationId, newStatus)
+    if (!result.success) return { success: false, message: result.message }
 
-    const criteriaId = app.criteriaId
-
-    if (criteriaId) {
-      // 2. นับจำนวนผู้ผ่านการคัดเลือกจริงในปัจจุบัน
-      const passedCount = await prisma.application.count({
-        where: {
-          criteriaId: criteriaId,
-          status: { in: ['PASSED', 'CONFIRMED'] as any },
-        },
-      })
-
-      const criteria = app.criteria
-
-      if (criteria) {
-        // 3. ปรับ isOpen ในตาราง ProgramCriteria ให้ตรงตามความจริงใน DB
-        const shouldBeOpen = passedCount < criteria.capacity
-
-        await prisma.programCriteria.update({
-          where: { Program_Criteriaid: criteriaId },
-          data: { isOpen: shouldBeOpen },
-        })
-      }
-    }
-
-    // 4. ล้าง Cache ทุกหน้า (ทั้งฝั่งนักเรียน อาจารย์ และเจ้าหน้าที่คณะ)
+    // ล้าง Cache ทุกหน้า (ทั้งฝั่งนักเรียน อาจารย์ และเจ้าหน้าที่คณะ)
     revalidatePath('/student/search')
+    revalidatePath('/student/sample-apply')
     revalidatePath('/teacher/applicants')
     revalidatePath('/teacher/courses')
     revalidatePath('/teacher/dashboard')

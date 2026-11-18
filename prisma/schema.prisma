@@ -7,14 +7,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// ----------------------------------------------------
-// ENUMS
-// ----------------------------------------------------
 
 enum Role {
   ADMIN
-  OFFICER      // เจ้าหน้าที่ประจำคณะ (สร้าง/จัดหลักสูตร, ยืนยันผลคัดเลือก)
-  TEACHER      // อาจารย์/กรรมการ (ดูรายชื่อผู้สมัคร, กดคัดเลือกผู้ผ่านเกณฑ์)
+  OFFICER      // เจ้าหน้าที่ประจำคณะ 
+  TEACHER      // อาจารย์
 }
 
 enum VerificationStatus {
@@ -25,9 +22,9 @@ enum VerificationStatus {
 
 enum ApplicationStatus {
   PENDING      // รอดำเนินการ
-  ELIGIBLE     // ระบบคำนวณว่า "ผ่านเกณฑ์ขั้นต่ำ"
-  INELIGIBLE   // ระบบคำนวณว่า "ไม่ผ่านเกณฑ์ขั้นต่ำ"
-  PASSED       // อาจารย์กดเลือก "คัดเลือกผ่าน" (นับเข้า capacity)
+  ELIGIBLE     // ระบบคำนวณว่า ผ่านเกณฑ์ขั้นต่ำ
+  INELIGIBLE   // ระบบคำนวณว่า ไม่ผ่านเกณฑ์ขั้นต่ำ
+  PASSED       // อาจารย์กดเลือก คัดเลือกผ่าน
   CONFIRMED    // เจ้าหน้าที่ประจำคณะกดยืนยันผลส่งมหาวิทยาลัย
   CANCELLED    // ยกเลิก
 }
@@ -52,8 +49,24 @@ model User {
   updatedAt    DateTime    @updatedAt
 
   auditLogs    AuditLog[]
+  resetTokens  PasswordResetToken[]
 
   @@map("D1_Users")
+}
+
+// 10. ลิงก์ตั้ง/รีเซ็ตรหัสผ่านที่ส่งทางอีเมล (เก็บเฉพาะค่า hash ของ token)
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [Usersid], onDelete: Cascade)
+  tokenHash String    @unique
+  purpose   String    @default("RESET") // RESET = ลืมรหัสผ่าน, SETUP = บัญชีใหม่ตั้งรหัสผ่านครั้งแรก
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("D10_Password_Reset_Tokens")
 }
 
 // 2. D2: Schools
@@ -246,8 +259,8 @@ model FacultyConfirmation {
   applicationId          String      @unique
   application            Application @relation(fields: [applicationId], references: [Applicationsid], onDelete: Cascade)
 
-  confirmedBy            String      // User ID ของผู้กดยืนยัน (อาจารย์/เจ้าหน้าที่)
-  confirmedRole          Role        // บทบาทผู้กด (TEACHER หรือ OFFICER)
+  confirmedBy            String      
+  confirmedRole          Role        
   note                   String?     @db.Text
 
   createdAt              DateTime    @default(now())

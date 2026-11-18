@@ -3,14 +3,16 @@
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import bcrypt from 'bcryptjs'
+import { getAdminUser } from '@/lib/adminAuth'
+import { isValidEmail, sendResetEmail, sendWelcomeEmail } from '@/lib/passwordReset'
 
 export async function createUserData(formData: FormData) {
   try {
     const name = formData.get('name') as string
-    const email = formData.get('email') as string
+    const email = ((formData.get('email') as string) || '').trim().toLowerCase()
     const rawPassword = formData.get('password') as string
     const roleType = formData.get('role') as 'OFFICER' | 'TEACHER' | 'ADMIN'
-    const teacherId = formData.get('teacherId') as string | null
+    const teacherId = ((formData.get('teacherId') as string | null) || '').trim() || null
 
     const universityMode = formData.get('universityMode') as string // 'SELECT' หรือ 'CUSTOM'
     let universityId = formData.get('universityId') as string | null
@@ -21,8 +23,14 @@ export async function createUserData(formData: FormData) {
     if (!name || !email || !rawPassword || !roleType) {
       return { success: false, message: 'กรุณากรอกข้อมูลสำคัญให้ครบถ้วน' }
     }
+    if (!isValidEmail(email)) {
+      return { success: false, message: 'รูปแบบอีเมลไม่ถูกต้อง กรุณาใช้อีเมลจริงของผู้ใช้งาน' }
+    }
+    if ((roleType === 'OFFICER' || roleType === 'TEACHER') && !teacherId) {
+      return { success: false, message: `กรุณากรอกรหัสประจำตัว${roleType === 'TEACHER' ? 'อาจารย์' : 'เจ้าหน้าที่'}` }
+    }
 
-    // 🔒 1. เข้ารหัสรหัสผ่าน (Hash Password) ก่อนบันทึกลงฐานข้อมูล
+    
     const hashedPassword = await bcrypt.hash(rawPassword, 10)
 
     // 📌 ถ้าเป็นเจ้าหน้าที่คณะ (OFFICER) สาขาวิชาจะถูกกำหนดเป็น "ประจำคณะ" โดยอัตโนมัติ
@@ -79,7 +87,7 @@ export async function createUserData(formData: FormData) {
       }
     }
 
-    // 📌 2. คำนวณรหัสผู้ใช้แบบปลอดภัย ป้องกัน ID ชนกันเมื่อมีผู้ใช้ถูกลบ
+    //  2. คำนวณรหัสผู้ใช้แบบปลอดภัย ป้องกัน ID ชนกันเมื่อมีผู้ใช้ถูกลบ
     const allUsers = await prisma.user.findMany({
       select: { Usersid: true },
     })
@@ -109,7 +117,7 @@ export async function createUserData(formData: FormData) {
       },
     })
 
-    // 📌 4. บันทึก AuditLog / SystemLog
+    //  4. บันทึก AuditLog / SystemLog
     try {
       const roleLabel = roleType === 'OFFICER' ? 'เจ้าหน้าที่คณะ' : roleType === 'TEACHER' ? 'อาจารย์' : 'ผู้ดูแลระบบ'
       const logDetails = `เพิ่มผู้ใช้งานใหม่ บทบาท: ${roleLabel} (${name} - ${email})`
@@ -142,13 +150,51 @@ export async function createUserData(formData: FormData) {
     revalidatePath('/admin/dashboard')
     revalidatePath('/admin/logs')
 
-    return { success: true, data: user }
+    // 📧 5. ส่งอีเมลต้อนรับ + ลิงก์ให้ผู้ใช้ตั้งรหัสผ่านเอง
+    const admin = await getAdminUser()
+    const mail = await sendWelcomeEmail(user, admin?.name)
+
+    return { success: true, mailSent: mail.sent, mailError: mail.error, email: user.email }
   } catch (error: any) {
     console.error('Create user error:', error)
     if (error.code === 'P2002') {
-      return { success: false, message: 'อีเมลนี้มีอยู่ในระบบแล้ว' }
+      const target = String(error.meta?.target ?? '')
+      return {
+        success: false,
+        message: target.includes('teacherId')
+          ? 'รหัสประจำตัวนี้มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น'
+          : 'อีเมลนี้มีอยู่ในระบบแล้ว',
+      }
     }
     return { success: false, message: error.message || 'เกิดข้อผิดพลาดในการเพิ่มผู้ใช้งาน' }
+  }
+}
+
+// 📧 Admin ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลผู้ใช้ (อาจารย์ / เจ้าหน้าที่ / ผู้ดูแลระบบ)
+export async function sendUserResetLink(userId: string) {
+  try {
+    const admin = await getAdminUser()
+    if (!admin) return { success: false, message: 'ต้องเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ' }
+
+    const user = await prisma.user.findUnique({ where: { Usersid: userId } })
+    if (!user) return { success: false, message: 'ไม่พบบัญชีผู้ใช้' }
+
+    const mail = await sendResetEmail(user, admin.name)
+    await prisma.auditLog.create({
+      data: {
+        action: 'PASSWORD_RESET_LINK_SENT',
+        details: `${admin.name} ส่งลิงก์รีเซ็ตรหัสผ่านให้ ${user.name} (${user.email}) — ${mail.sent ? 'ส่งอีเมลแล้ว' : `ส่งไม่สำเร็จ: ${mail.error}`}`,
+        userId: admin.Usersid,
+      },
+    })
+    revalidatePath('/admin/logs')
+
+    return mail.sent
+      ? { success: true, message: `ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${user.email} แล้ว` }
+      : { success: false, message: `ส่งอีเมลไม่สำเร็จ: ${mail.error}` }
+  } catch (error: any) {
+    console.error('Send user reset link error:', error)
+    return { success: false, message: error.message || 'เกิดข้อผิดพลาดในการส่งลิงก์' }
   }
 }
 
