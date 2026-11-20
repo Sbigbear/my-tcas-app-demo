@@ -23,7 +23,6 @@ export default function OfficerSidebar({ officerName, officerEmail }: OfficerSid
     router.refresh()
   }
 
-  // 📌 เพิ่มเมนู "จัดการอาจารย์ประจำสาขา" เข้าไปใน navItems
   const navItems = [
     { label: 'จัดการหลักสูตร/เกณฑ์', href: '/officer/courses', icon: '📚' },
     { label: 'จัดการอาจารย์ประจำสาขา', href: '/officer/teachers', icon: '👨‍🏫' },

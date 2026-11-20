@@ -25,7 +25,7 @@ export interface ReportApplication {
 interface ReportsClientProps {
   applications: ReportApplication[]
   teacherName: string
-  teacherUserId: string // 👈 รับ ID ของอาจารย์เพิ่ม
+  teacherUserId: string
   facultyName: string
   departmentName: string
   universityName: string
@@ -66,7 +66,6 @@ export default function ReportsClient({
     return true
   })
 
-  // 📌 สั่งพิมพ์ออกทาง PDF และบันทึก AuditLog เฉพาะตอนกดปุ่ม
   const handlePrint = async (type: 'ALL' | 'PASSED' | 'CONFIRMED') => {
     setFilterType(type)
     

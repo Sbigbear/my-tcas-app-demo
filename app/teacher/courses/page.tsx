@@ -64,7 +64,6 @@ export default async function TeacherCoursesPage() {
   const faculty = teacher.university?.faculty || ''
   const department = teacher.university?.department || ''
 
-  // 📌 แก้ไขจุดวิกฤต: กรองตาม คณะ + สาขา แทนการใช้ universityId ตรงๆ
   // หากอาจารย์สังกัด 'ประจำคณะ' จะเห็นหลักสูตรทั้งคณะ แต่ถ้าเป็นสาขาเฉพาะ จะเห็นเฉพาะสาขานั้น 100%
   const courses = faculty
     ? await prisma.programCriteria.findMany({

@@ -180,7 +180,7 @@ export default async function ReportsPage() {
     <ReportsClient
       applications={qualifiedApplications}
       teacherName={teacher.name || 'อาจารย์ประจำสาขา'}
-      teacherUserId={teacher.Usersid} // 👈 ส่ง ID ของอาจารย์เพิ่ม
+      teacherUserId={teacher.Usersid}
       facultyName={teacher.university?.faculty || 'คณะ'}
       departmentName={teacher.university?.department || 'สาขาวิชา'}
       universityName={teacher.university?.name || 'มหาวิทยาลัยเกษตรศาสตร์'}

@@ -33,10 +33,8 @@ export async function createTeacherData(formData: FormData) {
       return { success: false, message: 'กรุณากรอกรหัสประจำตัวอาจารย์' }
     }
 
-    // 🔒 1. เข้ารหัสรหัสผ่าน (Hash Password) ก่อนบันทึกลง DB
     const hashedPassword = await bcrypt.hash(rawPassword, 10)
 
-    // 📌 คณะต้องเป็นคณะของเจ้าหน้าที่ที่ล็อกอินอยู่ (ไม่เชื่อค่าที่หน้าเว็บส่งมา)
     const faculty = officer.university?.faculty
 
     if (!faculty) {
@@ -45,7 +43,6 @@ export async function createTeacherData(formData: FormData) {
 
     const campus = officer?.university?.campus || 'บางเขน'
 
-    // 📌 ค้นหาสังกัดในตาราง University (คณะ + สาขา)
     let universityTarget = await prisma.university.findFirst({
       where: {
         faculty: faculty,
@@ -78,7 +75,6 @@ export async function createTeacherData(formData: FormData) {
       })
     }
 
-    // 📌 สร้าง Usersid แบบหาตัวเลขสูงสุด + 1 ป้องกัน PK ชน
     const allUsers = await prisma.user.findMany({ select: { Usersid: true } })
     const userNumbers = allUsers
       .map((u) => {
@@ -90,7 +86,6 @@ export async function createTeacherData(formData: FormData) {
     const maxUserNum = userNumbers.length > 0 ? Math.max(...userNumbers) : 0
     const customUserId = `usr-t${String(maxUserNum + 1).padStart(2, '0')}`
 
-    // 🔒 2. บันทึกข้อมูลอาจารย์โดยใช้ hashedPassword
     const newTeacher = await prisma.user.create({
       data: {
         Usersid: customUserId,
@@ -103,7 +98,6 @@ export async function createTeacherData(formData: FormData) {
       },
     })
 
-    // 📧 3. ส่งอีเมลต้อนรับ + ลิงก์ให้อาจารย์ตั้งรหัสผ่านเอง
     const mail = await sendWelcomeEmail(newTeacher, officer?.name)
 
     revalidatePath('/officer/teachers')
@@ -125,7 +119,6 @@ export async function createTeacherData(formData: FormData) {
   }
 }
 
-// ✏️ เจ้าหน้าที่แก้ไขข้อมูลอาจารย์ (ชื่อ อีเมล รหัสประจำตัว สาขา) — เฉพาะอาจารย์ในคณะเดียวกัน
 export async function updateTeacherData(
   teacherUserId: string,
   input: { name: string; email: string; teacherId: string; department: string }
@@ -213,7 +206,6 @@ export async function updateTeacherData(
   }
 }
 
-// 📧 เจ้าหน้าที่ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลอาจารย์ (เฉพาะอาจารย์ในคณะเดียวกัน)
 export async function sendTeacherResetLink(teacherUserId: string) {
   try {
     const officer = await getOfficerInfo()
@@ -248,7 +240,6 @@ export async function sendTeacherResetLink(teacherUserId: string) {
   }
 }
 
-// 📌 Export ฟังก์ชันลบอาจารย์ให้เรียกใช้งานจาก Client ได้
 export async function deleteTeacherData(teacherUserId: string) {
   try {
     const officer = await getOfficerInfo()

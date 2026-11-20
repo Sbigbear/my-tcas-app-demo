@@ -23,7 +23,6 @@ export default function Sidebar({ studentName, studentId }: SidebarProps) {
     router.refresh()
   }
 
-  // 📌 เพิ่มเมนู /student/search สำหรับประเมินเกณฑ์ แยกจาก /student/sample-apply ชัดเจน
   const navItems = [
     { label: 'ภาพรวม', href: '/student/dashboard' },
     { label: 'สถานะการสมัคร', href: '/student/applications' },

@@ -74,7 +74,6 @@ export async function PUT(req: Request) {
       )
     }
 
-    // 🔒 ตรวจว่าเป็นอาจารย์ที่ล็อกอินอยู่ + ใบสมัครอยู่ในสังกัด + สถานะที่อาจารย์ตั้งได้ + ไม่เกินโควตา
     const result = await setApplicationStatusAsTeacher(String(applicationId), String(status), remark ?? null)
     if (!result.success) {
       return NextResponse.json({ success: false, message: result.message }, { status: result.httpStatus })

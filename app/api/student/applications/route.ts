@@ -8,7 +8,6 @@ async function getLoggedInStudentId() {
   return cookieStore.get('student_id')?.value || null
 }
 
-// 📌 ฟังก์ชันคำนวณและประมวลผลคุณสมบัติแบบอัตโนมัติอิงจากเกรดและคะแนนจริง
 function evaluateEligibility(student: any, criteria: any) {
   const failedReasons: string[] = []
 
@@ -102,8 +101,6 @@ function evaluateEligibility(student: any, criteria: any) {
 // 1. ฟังก์ชัน GET (ดึงรายการสมัคร + คำนวณและสั่ง UPDATE ซิงก์ลง MySQL ทันที)
 export async function GET(request: Request) {
   try {
-    // 🔒 ดูได้เฉพาะใบสมัครของนักเรียนที่ล็อกอินอยู่
-    //    (เดิมรับ ?studentId= จาก URL ทำให้เดารหัสนักเรียนแล้วดูคะแนน/ใบสมัครของคนอื่นได้ — ตอนนี้ไม่ใช้ค่านั้นแล้ว)
     const loggedInStudentId = await getLoggedInStudentId()
     if (!loggedInStudentId) {
       return NextResponse.json(
@@ -148,7 +145,6 @@ export async function GET(request: Request) {
       },
     })
 
-    // 📌 ประมวลผลและซิงก์ค่า status / remark ลง MySQL หากข้อมูลเดิมใน DB ไม่ถูกต้อง
     const updatedApplications = await Promise.all(
       applications.map(async (app: any) => {
         // ประเมินซ้ำเฉพาะใบสมัครที่ยังอยู่ขั้นระบบคำนวณ ห้ามเขียนทับ PASSED / CONFIRMED / CANCELLED
@@ -201,7 +197,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 🔒 สมัครได้เฉพาะในนามนักเรียนที่ล็อกอินอยู่ (ไม่รับ studentId จากหน้าเว็บ กันสมัครแทนคนอื่น)
     const targetStudentId = await getLoggedInStudentId()
     if (!targetStudentId) {
       return NextResponse.json(
@@ -210,7 +205,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 ดึงข้อมูลนักเรียนพร้อมคะแนน TCAS
     let student = null
     if (targetStudentId) {
       student = await prisma.student.findFirst({
@@ -225,7 +219,6 @@ export async function POST(req: Request) {
       })
     }
 
-    // ❌ [แก้ข้อ 3.1] ถอด Fallback ที่ดึงนักเรียนคนแรกใน DB ออก ป้องกันการสมัครผิดคน
     if (!student) {
       return NextResponse.json(
         { success: false, message: 'ไม่พบข้อมูลนักเรียนที่ระบุในระบบ กรุณาเข้าสู่ระบบอีกครั้ง' },
@@ -233,7 +226,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 [แก้ข้อ 3.2] ดึงเกณฑ์ของหลักสูตร
     const criteria = await prisma.programCriteria.findUnique({
       where: { Program_Criteriaid: criteriaId },
     })
@@ -245,7 +237,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 เช็กว่าหลักสูตรปิดรับสมัครอยู่หรือไม่
     if (criteria.isOpen === false) {
       return NextResponse.json(
         { success: false, message: 'หลักสูตรนี้ปิดรับสมัครแล้ว' },
@@ -253,9 +244,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 เช็กว่าเต็มโควตา (capacity) หรือยัง — นับเฉพาะคนที่อาจารย์คัดเลือกแล้ว (PASSED/CONFIRMED)
-    //    ผู้สมัครที่ยังรอพิจารณา (PENDING/ELIGIBLE) ไม่กินโควตา เพราะอาจไม่ถูกเลือก
-    //    (ใช้เกณฑ์เดียวกับหน้าค้นหา/หน้าอาจารย์/หน้าเจ้าหน้าที่ และ updateApplicationStatus)
     if (criteria.capacity) {
       const passedCount = await prisma.application.count({
         where: { criteriaId, status: { in: ['PASSED', 'CONFIRMED'] } },
@@ -306,7 +294,6 @@ export async function POST(req: Request) {
     const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0
     const newAppId = `app-${String(maxNum + 1).padStart(3, '0')}`
 
-    // 📌 ประมวลผลคุณสมบัติจริงเปรียบเทียบเกรด/คะแนน กับ เกณฑ์ทันที
     const evaluation = evaluateEligibility(student, criteria)
 
     // บันทึกการสมัครลงฐานข้อมูลพร้อมสถานะ ELIGIBLE / INELIGIBLE และเหตุผล

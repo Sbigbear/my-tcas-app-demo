@@ -14,7 +14,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 ค้นหาผู้ใช้จาก email และรองรับทั้งสิทธิ์ OFFICER และ ADMIN
     const user = await prisma.user.findFirst({
       where: {
         email: username,
@@ -31,7 +30,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 🔒 1. ตรวจสอบรหัสผ่านแฮชด้วย bcrypt.compare
     let isPasswordValid = false
     try {
       isPasswordValid = await bcrypt.compare(password, user.password)
@@ -46,7 +44,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 บันทึกประวัติการเข้าสู่ระบบ (AuditLog)
     try {
       await prisma.auditLog.create({
         data: {
@@ -78,7 +75,6 @@ export async function POST(req: Request) {
       maxAge: 60 * 60 * 24, // 1 วัน
     }
 
-    // 📌 บันทึก Cookie ให้ครบถ้วนสำหรับใช้ตรวจสอบใน Layout
     // ล้าง cookie ของบทบาทอื่นที่อาจค้างอยู่ ก่อนตั้งของการล็อกอินครั้งนี้
     clearSessionCookies(res)
     res.cookies.set('officer_id', user.Usersid, cookieOptions)

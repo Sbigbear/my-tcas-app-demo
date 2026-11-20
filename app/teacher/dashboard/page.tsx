@@ -65,7 +65,6 @@ export default async function TeacherDashboard() {
   const faculty = teacher.university?.faculty || ''
   const department = teacher.university?.department || ''
 
-  // 📌 ดึงเฉพาะรายการสมัครของ "สาขาวิชา" เดียวกับอาจารย์
   const applications = teacherUnivId
     ? await prisma.application.findMany({
         where: {

@@ -25,7 +25,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // 📌 บันทึกประวัติการเข้าสู่ระบบ (AuditLog) ของนักเรียน
     try {
       await prisma.auditLog.create({
         data: {
@@ -50,7 +49,6 @@ export async function POST(request: Request) {
       },
     })
 
-    // 📌 ตัวเลือก Cookie มาตรฐาน (ตั้งอายุไว้ 1 วัน)
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

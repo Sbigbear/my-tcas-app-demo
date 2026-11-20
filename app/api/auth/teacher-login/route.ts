@@ -15,7 +15,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // 📌 ค้นหาผู้ใช้จาก email และระบุ role ต้องเป็น TEACHER เท่านั้น
     const teacher = await prisma.user.findFirst({
       where: {
         email: username,
@@ -45,7 +44,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // 📌 บันทึกประวัติการเข้าสู่ระบบ (AuditLog)
     try {
       await prisma.auditLog.create({
         data: {
@@ -70,7 +68,6 @@ export async function POST(request: Request) {
       },
     })
 
-    // 📌 บันทึก Cookie สำหรับใช้ตรวจสอบสิทธิ์ในฝั่ง Server
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

@@ -31,7 +31,6 @@ export default function SearchClient({
   const [activeTab, setActiveTab] = useState<'ALL' | 'PASSED' | 'FAILED'>('ALL')
   const [openCardIds, setOpenCardIds] = useState<Record<string, boolean>>({})
   
-  // 📌 State เก็บ ID สาขาวิชาที่นักเรียนกดเลือกไว้
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
   // โหลดข้อมูลสาขาที่เคยเลือกไว้จาก localStorage
@@ -44,7 +43,6 @@ export default function SearchClient({
     }
   }, [])
 
-  // 📌 ฟังก์ชันสลับการเลือก/ยกเลิกสาขาวิชา (ล็อกให้เลือกได้เฉพาะสาขาที่ผ่านเกณฑ์เท่านั้น)
   const toggleSelectProgram = (program: ProgramItem) => {
     if (program.evalStatus === 'FAILED') {
       alert('คุณไม่ผ่านเกณฑ์ขั้นต่ำของสาขานี้ จึงไม่สามารถเลือกเข้าหน้ารายการสรุปได้')
@@ -183,7 +181,6 @@ export default function SearchClient({
                     </span>
 
                     <div className="flex items-center gap-2">
-                      {/* 📌 ปุ่มกดเลือกสาขาที่สนใจ */}
                       <button
                         type="button"
                         onClick={() => toggleSelectProgram(program)}
@@ -222,7 +219,6 @@ export default function SearchClient({
                   </div>
                 </div>
 
-                {/* 📌 แสดงเฉพาะจำนวนรับ (เอาคำว่า ตรงตามเกณฑ์ X/Y ข้อ ออกตามสั่ง) */}
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1 text-slate-600">
                     <Users className="w-3.5 h-3.5 text-slate-400" />

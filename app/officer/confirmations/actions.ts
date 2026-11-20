@@ -3,7 +3,6 @@
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
-// 📌 1. บันทึกยืนยันผลทีละคน (Single Confirm)
 export async function confirmFacultyOfficer(
   applicationId: string,
   officerUserId: string,
@@ -33,7 +32,6 @@ export async function confirmFacultyOfficer(
     const programName = application.criteria?.programName || 'หลักสูตร'
     const facultyName = application.criteria?.university?.faculty || ''
 
-    // 💡 ใช้ Transaction ครอบการอัปเดตและบันทึก AuditLog ให้ทำรายการพร้อมกันอย่างสมบูรณ์
     await prisma.$transaction([
       prisma.facultyConfirmation.upsert({
         where: { applicationId: applicationId },
@@ -75,7 +73,6 @@ export async function confirmFacultyOfficer(
   }
 }
 
-// 📌 2. บันทึกยืนยันผลยกแพ็กหลายรายการพร้อมกัน (Bulk Confirm)
 export async function confirmBulkFacultyOfficer(
   applicationIds: string[],
   officerUserId: string,
@@ -103,7 +100,6 @@ export async function confirmBulkFacultyOfficer(
       return { success: false, message: 'ไม่พบรายการใบสมัครที่เลือก' }
     }
 
-    // 💡 รวบรวม Query ทั้งหมดไว้ในอาร์เรย์แล้วรันผ่าน $transaction ครั้งเดียว
     const transactions: any[] = []
 
     for (const app of applications) {

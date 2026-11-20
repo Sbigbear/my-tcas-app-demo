@@ -451,7 +451,6 @@ export default function UserListClient({
                           />
                         </div>
 
-                        {/* 📌 ช่องสาขาวิชา: แสดงเฉพาะเมื่อเลือกบทบาทเป็น "อาจารย์" (TEACHER) เท่านั้น */}
                         {selectedRole === 'TEACHER' && (
                           <div>
                             <label className="block text-[11px] font-semibold text-slate-600 mb-1">

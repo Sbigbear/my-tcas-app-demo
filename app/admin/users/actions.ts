@@ -8,7 +8,6 @@ import { isValidEmail, sendResetEmail, sendWelcomeEmail } from '@/lib/passwordRe
 
 export async function createUserData(formData: FormData) {
   try {
-    // 🔒 server action เรียกจากภายนอกได้ -> ต้องเป็น ADMIN ที่ล็อกอินอยู่เท่านั้น
     const admin = await getAdminUser()
     if (!admin) return { success: false, message: 'ต้องเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ' }
 
@@ -37,7 +36,6 @@ export async function createUserData(formData: FormData) {
     
     const hashedPassword = await bcrypt.hash(rawPassword, 10)
 
-    // 📌 ถ้าเป็นเจ้าหน้าที่คณะ (OFFICER) สาขาวิชาจะถูกกำหนดเป็น "ประจำคณะ" โดยอัตโนมัติ
     const department = roleType === 'OFFICER' ? 'ประจำคณะ' : rawDepartment
 
     if (roleType === 'OFFICER' || roleType === 'TEACHER') {
@@ -108,7 +106,6 @@ export async function createUserData(formData: FormData) {
     const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0
     const customUserId = `${prefix}${String(maxNum + 1).padStart(2, '0')}`
 
-    // 🔒 3. สร้างบัญชีผู้ใช้งาน (ใช้รหัสผ่านที่ถูกแฮชแล้ว)
     const user = await prisma.user.create({
       data: {
         Usersid: customUserId,
@@ -154,7 +151,6 @@ export async function createUserData(formData: FormData) {
     revalidatePath('/admin/dashboard')
     revalidatePath('/admin/logs')
 
-    // 📧 5. ส่งอีเมลต้อนรับ + ลิงก์ให้ผู้ใช้ตั้งรหัสผ่านเอง
     const mail = await sendWelcomeEmail(user, admin?.name)
 
     return { success: true, mailSent: mail.sent, mailError: mail.error, email: user.email }
@@ -173,7 +169,6 @@ export async function createUserData(formData: FormData) {
   }
 }
 
-// 📧 Admin ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลผู้ใช้ (อาจารย์ / เจ้าหน้าที่ / ผู้ดูแลระบบ)
 export async function sendUserResetLink(userId: string) {
   try {
     const admin = await getAdminUser()
@@ -203,7 +198,6 @@ export async function sendUserResetLink(userId: string) {
 
 export async function deleteUserData(id: string, type: 'USER' | 'STUDENT') {
   try {
-    // 🔒 ต้องเป็น ADMIN ที่ล็อกอินอยู่ และห้ามลบบัญชีตัวเอง (กันไม่มีแอดมินเหลือ)
     const admin = await getAdminUser()
     if (!admin) return { success: false, message: 'ต้องเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ' }
     if (type === 'USER' && id === admin.Usersid) return { success: false, message: 'ไม่สามารถลบบัญชีของตัวเองได้' }

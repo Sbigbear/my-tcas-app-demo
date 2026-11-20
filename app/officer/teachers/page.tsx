@@ -13,7 +13,6 @@ export default async function OfficerTeachersPage() {
     redirect('/login')
   }
 
-  // 📌 1. ดึงชื่อคณะของเจ้าหน้าที่
   let officerFaculty = officer.university?.faculty || ''
 
   if (!officerFaculty) {
@@ -38,7 +37,6 @@ export default async function OfficerTeachersPage() {
     }
   }
 
-  // 📌 2. ดึงอาจารย์เฉพาะที่อยู่ในคณะเดียวกับเจ้าหน้าที่คนนี้
   const teachers = officerFaculty
     ? await prisma.user.findMany({
         where: {
@@ -54,7 +52,6 @@ export default async function OfficerTeachersPage() {
       })
     : []
 
-  // 📌 3. ดึงรายชื่อสาขาวิชาทั้งหมดในคณะนี้เพื่อทำ Dropdown
   const facultyDepartments = officerFaculty
     ? await prisma.university.findMany({
         where: { faculty: officerFaculty },

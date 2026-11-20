@@ -14,7 +14,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 ค้นหาผู้ใช้สิทธิ์ ADMIN หรือ OFFICER
     const user = await prisma.user.findFirst({
       where: {
         email: username,
@@ -31,7 +30,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 🔒 1. ตรวจเช็กด้วย bcrypt compare
     let isPasswordValid = false
     try {
       isPasswordValid = await bcrypt.compare(password, user.password)
@@ -39,7 +37,6 @@ export async function POST(req: Request) {
       isPasswordValid = false
     }
 
-    // 🔄 2. Fallback: กรณีรหัสใน DB ยังเป็น Plaintext
     if (!isPasswordValid && user.password === password) {
       isPasswordValid = true
 
@@ -61,7 +58,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 📌 บันทึกประวัติการเข้าสู่ระบบ (AuditLog)
     try {
       await prisma.auditLog.create({
         data: {

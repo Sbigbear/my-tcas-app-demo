@@ -24,7 +24,6 @@ export default async function LogsPage() {
         }
       }
 
-      // 📌 แมปประเภทหมวดหมู่ Log ให้ครอบคลุมทุก Action
       let logType: LogEntry['type'] = 'system'
       const actionText = (log.action || '').toLowerCase()
       const detailsText = (log.details || '').toLowerCase()

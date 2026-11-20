@@ -26,7 +26,6 @@ async function sendToAll(
   return { total: officers.length, sent: results.filter((r) => r.sent).length, error: results.find((r) => !r.sent)?.error }
 }
 
-// 📧 ข้อ 3: อาจารย์คัดเลือกครบจำนวนรับ -> แจ้งเจ้าหน้าที่คณะให้มายืนยันผล (ส่งครั้งเดียวตอนครบ)
 export async function notifySelectionComplete(course: CourseInfo, teacherName: string) {
   const officers = await facultyOfficers(course.university.faculty)
   if (officers.length === 0) return { total: 0, sent: 0 }
@@ -42,7 +41,6 @@ export async function notifySelectionComplete(course: CourseInfo, teacherName: s
   )
 }
 
-// 📧 ข้อ 4: อาจารย์เสนอแก้ไขเกณฑ์ -> ส่งข้อความถึงเจ้าหน้าที่คณะ (ตอบกลับอีเมลแล้วถึงอาจารย์โดยตรง)
 export async function notifyCourseChangeRequest(course: CourseInfo, teacher: { name: string; email: string }, message: string) {
   const officers = await facultyOfficers(course.university.faculty)
   if (officers.length === 0) return { total: 0, sent: 0 }

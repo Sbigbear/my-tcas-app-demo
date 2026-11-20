@@ -9,7 +9,6 @@ export default async function OfficerLayout({
 }) {
   const cookieStore = await cookies()
   
-  // 📌 เปลี่ยนมาดึง officer_id และ role ให้ตรงกับ API
   const officerId = cookieStore.get('officer_id')?.value || cookieStore.get('userId')?.value
   const userRole = cookieStore.get('role')?.value || cookieStore.get('user_role')?.value
 

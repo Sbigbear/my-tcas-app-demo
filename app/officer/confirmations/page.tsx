@@ -62,7 +62,6 @@ export default async function OfficerConfirmationsPage() {
 
   const faculty = officer.university?.faculty || ''
 
-  // 📌 ดึงรายการผู้สมัครที่ผ่านการคัดเลือก (PASSED / CONFIRMED) ภายใต้คณะนี้
   const applications = faculty
     ? await prisma.application.findMany({
         where: {
@@ -88,7 +87,6 @@ export default async function OfficerConfirmationsPage() {
       })
     : []
 
-  // 📌 แมปโครงสร้างข้อมูลให้ตรงกับที่ ConfirmationsClient.tsx เรียกใช้ทุกช่อง
   const formattedApplications = applications.map((app: any) => ({
     id: app.Applicationsid,
     applicationId: app.Applicationsid,

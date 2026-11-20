@@ -186,7 +186,6 @@ export default function TeacherClient({
 
             <form
               action={async (formData) => {
-                // 📌 แนบ faculty และ officerUserId ติดไปใน FormData ด้วยเสมอ
                 formData.append('faculty', facultyName)
                 if (officerUserId) formData.append('officerUserId', officerUserId)
                 setFormError(null)

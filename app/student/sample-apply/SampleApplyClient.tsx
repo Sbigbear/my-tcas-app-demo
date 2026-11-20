@@ -131,7 +131,6 @@ export default function SampleApplyClient({
                   </span>
                 </p>
 
-                {/* 📌 แสดงป้ายเกณฑ์ขั้นต่ำทั้งหมด พับลงบรรทัดใหม่อัตโนมัติ (flex-wrap) */}
                 <div className="flex flex-wrap gap-1.5 pt-1 text-[11px]">
                   <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 font-medium">
                     รับจำนวน: <strong>{course.capacity} คน</strong>

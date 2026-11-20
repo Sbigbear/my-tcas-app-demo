@@ -20,7 +20,7 @@ interface ConfirmationItem {
 }
 
 export default function ConfirmationsClient({
-  confirmations = [], // 📌 กำหนดค่าเริ่มต้นเป็น [] ป้องกันค่า undefined
+  confirmations = [],
   officerUserId,
 }: {
   confirmations?: ConfirmationItem[]
@@ -31,7 +31,6 @@ export default function ConfirmationsClient({
   const [isBulkLoading, setIsBulkLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
-  // 📌 ป้องกันการพังด้วย safeConfirmations
   const safeConfirmations = confirmations || []
 
   // รายการนักเรียนที่อาจารย์ให้ผ่านแล้ว แต่งานยังไม่ถูกยืนยันส่งมหาวิทยาลัย

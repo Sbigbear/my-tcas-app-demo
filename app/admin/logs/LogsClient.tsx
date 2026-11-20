@@ -17,7 +17,6 @@ interface LogsClientProps {
   initialLogs: LogEntry[]
 }
 
-// 📌 ฟังก์ชันจำแนกหมวดหมู่ประเภทกิจกรรม (Type Resolver)
 function resolveLogType(log: LogEntry): 'auth' | 'user' | 'course' | 'passed_students' | 'report' | 'system' {
   if (log.type && log.type !== 'system') return log.type
 
@@ -123,7 +122,6 @@ export default function LogsClient({ initialLogs }: LogsClientProps) {
             />
           </div>
 
-          {/* 📌 แท็บแยกตามประเภทกิจกรรม */}
           <div className="flex gap-1.5 w-full md:w-auto overflow-x-auto">
             {[
               { key: 'all', label: 'กิจกรรมทั้งหมด', icon: ListFilter },
@@ -152,7 +150,6 @@ export default function LogsClient({ initialLogs }: LogsClientProps) {
           </div>
         </div>
 
-        {/* 📌 ตัวกรองตามบทบาทผู้ใช้งาน (Role) */}
         <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs overflow-x-auto">
           <span className="text-slate-400 font-medium shrink-0">บทบาทผู้ใช้งาน:</span>
           <div className="flex gap-1.5">

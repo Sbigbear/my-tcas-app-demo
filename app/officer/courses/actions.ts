@@ -62,7 +62,6 @@ async function resolveDepartment(
   return created.Universitiesid
 }
 
-// ➕ เพิ่มหลักสูตรใหม่
 export async function createCourseAction(payload: CoursePayload) {
   try {
     const officer = await getLoggedInOfficer()
@@ -108,7 +107,6 @@ export async function createCourseAction(payload: CoursePayload) {
   }
 }
 
-// 🗑️ ลบหลักสูตร — ลบได้เฉพาะหลักสูตรที่ยังไม่มีผู้สมัคร (ถ้ามีแล้ว ให้ปิดรับสมัครแทน กันข้อมูลนักเรียนหาย)
 export async function deleteCourseAction(courseId: string) {
   try {
     const officer = await getLoggedInOfficer()
@@ -146,7 +144,6 @@ export async function deleteCourseAction(courseId: string) {
   }
 }
 
-// ✏️ แก้ไขหลักสูตร (รหัสหลักสูตรแก้ไม่ได้ เพราะใบสมัครผูกกับรหัสนี้)
 export async function updateCourseAction(courseId: string, payload: CoursePayload) {
   try {
     const officer = await getLoggedInOfficer()

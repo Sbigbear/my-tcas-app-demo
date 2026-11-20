@@ -5,7 +5,6 @@ import AdminSidebar from './components/AdminSidebar'
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies()
   
-  // 📌 เปลี่ยนมาดึง admin_id และ role ให้ตรงกับที่ตั้งใน admin-login/route.ts
   const adminId = cookieStore.get('admin_id')?.value || cookieStore.get('userId')?.value
   const userRole = cookieStore.get('role')?.value
 

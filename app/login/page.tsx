@@ -83,7 +83,6 @@ export default function LoginPage() {
         // 1. บันทึกข้อมูล Object ของผู้ใช้
         localStorage.setItem('user', JSON.stringify(userToSave))
 
-        // 📌 2. บันทึก ID แยกตามบทบาท
         if (role === 'student') {
           const studentIdToStore = 
             userToSave.studentId || 

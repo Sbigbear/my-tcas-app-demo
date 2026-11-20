@@ -78,7 +78,6 @@ export default async function OfficerCoursesPage() {
               (a) => a.status === 'PASSED' || a.status === 'CONFIRMED'
             ).length
 
-            // 📌 รวบรวมเกณฑ์การรับสมัครให้ครบถ้วนทุกฟิลด์ใน Schema D6_Program_Criteria
             const criteriaList = [
               // เกรดเฉลี่ยขั้นต่ำ (GPA)
               course.minGpax ? `GPAX ขั้นต่ำ: ${Number(course.minGpax).toFixed(2)}` : null,
@@ -186,7 +185,6 @@ export default async function OfficerCoursesPage() {
                     )}
                   </div>
 
-                  {/* 📌 แสดงเงื่อนไขเพิ่มเติม (additionals) ถ้ามี */}
                   {course.additionals && (
                     <div className="mt-2 p-2.5 bg-amber-50/60 border border-amber-200/60 rounded-xl text-xs text-amber-900">
                       <strong>เงื่อนไขเพิ่มเติม:</strong> {course.additionals}

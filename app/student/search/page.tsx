@@ -46,7 +46,6 @@ async function getStudentInfo() {
   }
 }
 
-// 📌 ฟังก์ชันประเมินเกณฑ์เหลือ 2 สถานะ: PASSED และ FAILED
 function evaluateProgram(student: any, criteria: any): {
   status: 'PASSED' | 'FAILED'
   passedCount: number
@@ -157,7 +156,6 @@ function evaluateProgram(student: any, criteria: any): {
     }
   })
 
-  // 📌 ผ่านทุกข้อ = PASSED / มีไม่ผ่านแม้แต่ข้อเดียว = FAILED
   const status: 'PASSED' | 'FAILED' = failedReqs === 0 ? 'PASSED' : 'FAILED'
 
   return { status, passedCount: passedReqs, totalCount: totalReqs, failedReasons }

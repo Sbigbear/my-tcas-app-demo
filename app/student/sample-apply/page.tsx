@@ -40,7 +40,6 @@ export default async function StudentSampleApplyPage() {
     orderBy: { createdAt: 'desc' },
   })
 
-  // 📌 ซิงก์สถานะและรวบรวมเกณฑ์การรับสมัครทั้งหมดที่มีในระบบ
   const formattedCourses = await Promise.all(
     rawCourses.map(async (c: any) => {
       const criteriaId = c.Program_Criteriaid || c.ProgramCriteriaid || c.id
@@ -63,7 +62,6 @@ export default async function StudentSampleApplyPage() {
         ? activeApplications.some((app: any) => app.studentId === currentStudent.Studentsid)
         : false
 
-      // 📌 รวบรวมเกณฑ์คุณสมบัติขั้นต่ำทั้งหมดที่มีใน DB
       const criteriaList = [
         // 1. เกรดเฉลี่ย (GPA)
         c.minGpax ? `GPAX ขั้นต่ำ: ${Number(c.minGpax).toFixed(2)}` : null,
